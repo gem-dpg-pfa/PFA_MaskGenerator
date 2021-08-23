@@ -32,5 +32,5 @@ This utility produces as output
     DCS.root and DQM.root have all timestamps in UTC time
 
 ### Typical Output
-* JSON File --> ([./ChamberOFF_Example.txt](./ChamberOFF_Run_343266.json))
+* JSON File --> ([./ChamberOFF_Run_343266.json](./ChamberOFF_Run_343266.json))
 * ROOT File --> ([./HV_Status_Run_343266.root](./HV_Status_Run_343266.root))

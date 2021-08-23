@@ -26,6 +26,7 @@ import time
 import json
 import argparse
 from argparse import RawTextHelpFormatter
+import os
 
 
 
@@ -90,6 +91,15 @@ desiredIeq = args.ieq_expected
 granularity = 20 # max delta t between 2 points --> has to be less than SECONDS_PER_LUMISECTION
 RunNumber = args.run
 ## End Inputs
+
+
+## Downloading DQM.root
+RunNumber_MSDigits2 = str(RunNumber)[:2]+"xxxx"
+RunNumber_MSDigits4 = str(RunNumber)[:4]+"xx"
+cmd = "wget --ca-cert=/afs/cern.ch/user/f/fivone/.globus/usercert.p12 --certificate=/afs/cern.ch/user/f/fivone/.globus/usercert.pem --private-key=/afs/cern.ch/user/f/fivone/.globus/userkey.pem https://cmsweb.cern.ch/dqm/offline/data/browse/ROOT/OnlineData/original/000"+RunNumber_MSDigits2+"/000"+RunNumber_MSDigits4+"/DQM_V0001_GEM_R000"+str(RunNumber)+".root -O DQM_"+str(RunNumber)+".root"
+os.system(cmd)
+return 0
+
 
 RunStart_TimeStamp = time.mktime(time.strptime(RunStartTime_UTC, '%Y-%m-%d_%H-%M-%S'))
 RunStop_TimeStamp = RunStart_TimeStamp + N_LumiSections*SECONDS_PER_LUMISECTION
