@@ -4,7 +4,7 @@ Tool that generates the chamber masking file for PFA Efficiency analyzer
 ------
 
 ## Requirements
-1. A PEM certificate (the one you use for CRAB submission) is needed to access DQM files stored at this (link)[https://cmsweb.cern.ch/dqm/offline/data/browse/ROOT/OnlineData/original/00034xxxx]. Currently in the code it is hardcoded my PEM certificate path....adjust according to yours
+1. A PEM certificate (the one you use for CRAB submission) is needed to access DQM files stored at this [link](https://cmsweb.cern.ch/dqm/offline/data/browse/ROOT/OnlineData/original/00034xxxx). Currently in the code it is hardcoded my PEM certificate path....adjust according to yours
 1. A working copy of [Simone's tool](https://github.com/simonepv/P5GEMOfflineMonitor) under the env var *$DCS_TOOL*
     * You might need to set some env var to make Simone's tool work
 1. The ouput files of Simone's tool are expected to be found under *$DCS_TOOL/OutputFiles*
@@ -19,6 +19,7 @@ Tool that generates the chamber masking file for PFA Efficiency analyzer
 This utility takes as **input**
 * RunNumberList
 * Expected Ieq List
+
 For each run in the RunNumberList this utility produces as **output**
 * ChamberOFF_Run_<RunNumber>.json  (a JSON formatted file containing LS to mask for each chamber)
 * HV_Status_Run_<RunNumber>.root)  (a ROOT file containing plots)
