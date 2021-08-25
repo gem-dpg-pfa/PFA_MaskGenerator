@@ -175,9 +175,9 @@ for RunNumber in RunNumberList:
 
 
     ## Step 2: Fetching DCS.root
-    # Using a 36h window centered on the run to avoid DCS channels without HV points
-    DayBefore_RunStart_TimeStamp_UTC = RunStart_TimeStamp_UTC - 18*3600
-    DayAfter_RunStop_TimeStamp_UTC = RunStop_TimeStamp_UTC + 18*3600
+    # Using a 24h window centered on the run to avoid DCS channels without HV points
+    DayBefore_RunStart_TimeStamp_UTC = RunStart_TimeStamp_UTC - 12*3600
+    DayAfter_RunStop_TimeStamp_UTC = RunStop_TimeStamp_UTC + 12*3600
     DayBefore_RunStart_Datetime_UTC = datetime.datetime.fromtimestamp(DayBefore_RunStart_TimeStamp_UTC).strftime('%Y-%m-%d_%H:%M:%S')
     DayAfter_RunStop_Datetime_UTC = datetime.datetime.fromtimestamp(DayAfter_RunStop_TimeStamp_UTC).strftime('%Y-%m-%d_%H:%M:%S')
 
@@ -225,8 +225,8 @@ for RunNumber in RunNumberList:
     for endcap in [1,-1]:
         for ch_n in range(1,37):
             ch = '%02d' %ch_n
-            re = "_" if endcap == -1 else "+"
-            SC_ID = "SC GE"+re+ch
+            region_string = "_" if endcap == -1 else "+"
+            SC_ID = "SC GE"+region_string+ch
 
             ChID_L1 = ReChLa2chamberName(endcap,ch_n,1)
             ChID_L2 = ReChLa2chamberName(endcap,ch_n,2)        
@@ -239,13 +239,13 @@ for RunNumber in RunNumberList:
 
             ## Fetching TGraphs
             try:
-                G1Top = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G1Top_UTC_time")
-                G2Top = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G2Top_UTC_time")
-                G3Top = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G3Top_UTC_time")
-                G1Bot = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G1Bot_UTC_time")
-                G2Bot = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G2Bot_UTC_time")
-                G3Bot = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G3Bot_UTC_time")
-                Drift = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_Drift_UTC_time")
+                G1Top = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G1Top_UTC_time")
+                G2Top = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G2Top_UTC_time")
+                G3Top = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G3Top_UTC_time")
+                G1Bot = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G1Bot_UTC_time")
+                G2Bot = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G2Bot_UTC_time")
+                G3Bot = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G3Bot_UTC_time")
+                Drift = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_Drift_UTC_time")
             except:
                 print "Couldn't find data for ",SC_ID,"... Skipping"
 
@@ -381,7 +381,7 @@ for RunNumber in RunNumberList:
     writeToTFile(OutF,runStart_TLine[SC_ID],"SCs")
     writeToTFile(OutF,runStop_TLine[SC_ID],"SCs")
     writeToTFile(OutF,c_negative_encap)
-    writeToTFile(OutF,c_negative_encap)
+    writeToTFile(OutF,c_positive_encap)
 
     jsonFile = open("ChamberOFF_Run_"+str(RunNumber)+".json", "w")
     json_data = json.dumps(MaskDict) 
