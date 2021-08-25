@@ -130,13 +130,13 @@ for index,RunNumber in enumerate(RunNumberList):
 temp_txt.close()
 
 print "\n## Fetching DQM file ..."
-cmd = "wget --ca-cert=/afs/cern.ch/user/f/fivone/.globus/usercert.p12 --certificate=/afs/cern.ch/user/f/fivone/.globus/usercert.pem --private-key=/afs/cern.ch/user/f/fivone/.globus/userkey.pem  -i Temp_ListOfDQMurls.txt"
+username = os.getenv("USER")
+cert_path = "/afs/cern.ch/user/"+username[0]+"/"+username+"/.globus/"
+cmd = "wget --ca-cert="+cert_path+"/usercert.p12 --certificate="+cert_path+"/usercert.pem --private-key="+cert_path+"/userkey.pem  -i Temp_ListOfDQMurls.txt"
 print cmd
 os.system(cmd)
-
 os.system("rm Temp_ListOfDQMurls.txt")
 ## End of fetching multiple DQM.root
-
 
 
 ## Produce output file for all Runs
@@ -175,18 +175,18 @@ for RunNumber in RunNumberList:
 
 
     ## Step 2: Fetching DCS.root
-    # Using a 24h window centered on the run to avoid DCS channels without HV points
-    DayBefore_RunStart_TimeStamp_UTC = RunStart_TimeStamp_UTC - 12*3600
-    DayAfter_RunStop_TimeStamp_UTC = RunStop_TimeStamp_UTC + 12*3600
+    # Using a 36h window centered on the run to avoid DCS channels without HV points
+    DayBefore_RunStart_TimeStamp_UTC = RunStart_TimeStamp_UTC - 18*3600
+    DayAfter_RunStop_TimeStamp_UTC = RunStop_TimeStamp_UTC + 18*3600
     DayBefore_RunStart_Datetime_UTC = datetime.datetime.fromtimestamp(DayBefore_RunStart_TimeStamp_UTC).strftime('%Y-%m-%d_%H:%M:%S')
     DayAfter_RunStop_Datetime_UTC = datetime.datetime.fromtimestamp(DayAfter_RunStop_TimeStamp_UTC).strftime('%Y-%m-%d_%H:%M:%S')
 
     print "\n## Fetching DCS file ..."
     DCS_TOOL_folder = os.getenv("DCS_TOOL")
-    cmd = "python "+DCS_TOOL_folder+"/GEMDCSP5Monitor.py "+DayBefore_RunStart_Datetime_UTC +" "+ DayAfter_RunStop_Datetime_UTC +" HV 0"
+    cmd = "python "+DCS_TOOL_folder+"/GEMDCSP5Monitor.py "+DayBefore_RunStart_Datetime_UTC +" "+ DayAfter_RunStop_Datetime_UTC +" HV 0 -c all"
     print cmd
     os.system(cmd)
-    DCS_dump_file = DCS_TOOL_folder+"OutputFiles/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
+    DCS_dump_file = DCS_TOOL_folder+"/OutputFiles/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
     print "\n## Fetch COMPLETE"
     ## End of Step 2
 
@@ -225,8 +225,8 @@ for RunNumber in RunNumberList:
     for endcap in [1,-1]:
         for ch_n in range(1,37):
             ch = '%02d' %ch_n
-            region_string = "_" if endcap == -1 else "+"
-            SC_ID = "SC GE"+region_string+ch
+            re = "_" if endcap == -1 else "+"
+            SC_ID = "SC GE"+re+ch
 
             ChID_L1 = ReChLa2chamberName(endcap,ch_n,1)
             ChID_L2 = ReChLa2chamberName(endcap,ch_n,2)        
@@ -239,13 +239,13 @@ for RunNumber in RunNumberList:
 
             ## Fetching TGraphs
             try:
-                G1Top = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G1Top_UTC_time")
-                G2Top = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G2Top_UTC_time")
-                G3Top = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G3Top_UTC_time")
-                G1Bot = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G1Bot_UTC_time")
-                G2Bot = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G2Bot_UTC_time")
-                G3Bot = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_G3Bot_UTC_time")
-                Drift = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_Drift_UTC_time")
+                G1Top = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G1Top_UTC_time")
+                G2Top = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G2Top_UTC_time")
+                G3Top = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G3Top_UTC_time")
+                G1Bot = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G1Bot_UTC_time")
+                G2Bot = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G2Bot_UTC_time")
+                G3Bot = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_G3Bot_UTC_time")
+                Drift = inFile.Get("GE"+re+"1_1_"+ch+"/HV_VmonChamberGE"+re+"1_1_"+ch+"_Drift_UTC_time")
             except:
                 print "Couldn't find data for ",SC_ID,"... Skipping"
 
@@ -381,7 +381,7 @@ for RunNumber in RunNumberList:
     writeToTFile(OutF,runStart_TLine[SC_ID],"SCs")
     writeToTFile(OutF,runStop_TLine[SC_ID],"SCs")
     writeToTFile(OutF,c_negative_encap)
-    writeToTFile(OutF,c_positive_encap)
+    writeToTFile(OutF,c_negative_encap)
 
     jsonFile = open("ChamberOFF_Run_"+str(RunNumber)+".json", "w")
     json_data = json.dumps(MaskDict) 
