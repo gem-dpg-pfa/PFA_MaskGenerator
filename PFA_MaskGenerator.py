@@ -32,7 +32,10 @@ import os
 import re
 import pytz
 import sys
-
+import ctypes
+import numpy as np
+import scipy.interpolate as sp
+import matplotlib.pyplot as plt
 
 __author__ = "Francesco Ivone"
 __copyright__ = "Copyright 2021, CMS GEM"
@@ -92,6 +95,7 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('-rl','--RunNumberList', type=int,help="Run Number List ",required=True,nargs='*')
 parser.add_argument('-iexpl','--ieq_expected_list', type=int,help="Expected list of ieq for the run list",required=True,nargs='*')
+parser.add_argument('-rDCS','--recreateDCS', help="Force DCS rootfile recreation")
 args = parser.parse_args()
 
 ROOT.gROOT.SetBatch(True)
@@ -99,7 +103,7 @@ ROOT.gROOT.SetBatch(True)
 ## Inputs
 DesiredIeqList = args.ieq_expected_list
 RunNumberList = args.RunNumberList
-SECONDS_PER_LUMISECTION = 24
+SECONDS_PER_LUMISECTION = 23.3
 granularity = 20 # max delta t between 2 points --> has to be less than SECONDS_PER_LUMISECTION
 ## End Inputs
 
@@ -120,10 +124,8 @@ for index,RunNumber in enumerate(RunNumberList):
     DQM_FileName = "DQM_V0001_GEM_R000"+str(RunNumber)+".root"
     Run2DesiredIeq[RunNumber] = DesiredIeqList[index]
     Run2DQM_FileName[RunNumber] = DQM_FileName
-
     RunNumber_MSDigits2 = str(RunNumber)[:2]+"xxxx"
     RunNumber_MSDigits4 = str(RunNumber)[:4]+"xx"
-
     temp_txt = open('Temp_ListOfDQMurls.txt', 'a')
     url = "https://cmsweb.cern.ch/dqm/offline/data/browse/ROOT/OnlineData/original/000"+RunNumber_MSDigits2+"/000"+RunNumber_MSDigits4+"/"+DQM_FileName+"\n"
     temp_txt.write(url)
@@ -184,10 +186,12 @@ for RunNumber in RunNumberList:
     print "\n## Fetching DCS file ..."
     DCS_TOOL_folder = os.getenv("DCS_TOOL")
     DCS_dump_file = DCS_TOOL_folder+"/OutputFiles/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
-    cmd = "python "+DCS_TOOL_folder+"/GEMDCSP5Monitor.py "+DayBefore_RunStart_Datetime_UTC +" "+ DayAfter_RunStop_Datetime_UTC +" HV 0 -c all"
-    print cmd
-    os.system(cmd)
-    DCS_dump_file = DCS_TOOL_folder+"/OutputFiles/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
+    if os.path.isfile(DCS_dump_file) and (args.recreateDCS is None):
+        print DCS_dump_file, "already exists\n"
+    else:
+        cmd = "python "+DCS_TOOL_folder+"/GEMDCSP5Monitor.py "+DayBefore_RunStart_Datetime_UTC +" "+ DayAfter_RunStop_Datetime_UTC +" HV 0 -c all"
+        print cmd
+        os.system(cmd)
     print "\n## Fetch COMPLETE"
     ## End of Step 2
 
@@ -226,7 +230,7 @@ for RunNumber in RunNumberList:
     for endcap in [1,-1]:
         for ch_n in range(1,37):
             ch = '%02d' %ch_n
-            region_string = "_" if endcap == -1 else "+"
+            region_string = "_M" if endcap == -1 else "_P"
             SC_ID = "SC GE"+region_string+ch
 
             ChID_L1 = ReChLa2chamberName(endcap,ch_n,1)
@@ -267,69 +271,51 @@ for RunNumber in RunNumberList:
                 print "Skipping ", SC_ID
                 continue
 
-
-            firstX = [ ROOT.Double() for i in range(0,7)]
-            firstY = [ ROOT.Double() for i in range(0,7)]
-            lastX = [ ROOT.Double() for i in range(0,7)]
-            lastY = [ ROOT.Double() for i in range(0,7)]
-            newGraph = [ROOT.TGraph() for i in range(0,7)]
-            temp_x, temp_y = ROOT.Double(),ROOT.Double()
-
-
-            ## Evaluating widest range in which at least 1 of the channels has data
+            x_list = []
+            y_list = []
+            ## Fetching TGraphs as numpy arrays
             for index,graph in enumerate(fetched_graph):
-                graph.GetPoint(0,firstX[index],firstY[index])
-                graph.GetPoint(graph.GetN()-1,lastX[index],lastY[index])
+                # Create buffers
+                x_buff, N = graph.GetX(), graph.GetN()
+                y_buff, N = graph.GetY(), graph.GetN()
+                # Convert to numpy arrays
+                x_arr = np.array(np.frombuffer(x_buff, dtype=np.double))
+                y_arr = np.array(np.frombuffer(y_buff, dtype=np.double))
+                x_list.append(x_arr)
+                y_list.append(y_arr)
 
-                previous_x = firstX[index]
-                previous_y = firstY[index]
+            ##create common x axis using min and max time across all channels 
+            time_min = min (np.min(t) for t in x_list)
+            time_max = max (np.max(t) for t in x_list)
+            time_N = int((time_max-time_min)/granularity)
+            x_new = np.linspace(time_min, time_max, time_N)  # the new x axis with desired granularity
 
-            lastTimestamp = max(lastX)
-            firstTimestamp = min(firstX)
+            ieq_arr = np.zeros_like(x_new) #zeros array with same shape as time axis
+            for x_arr,y_arr in zip(x_list, y_list):
+                #interpolate existing data using nearest neighbor (in our case, previous point)
+                ipo = sp.interp1d(x_arr, y_arr, kind='previous', fill_value=(y_arr[0], y_arr[-1]), bounds_error=False) #extrapolation at bounds: use first and last HV point
+                #evaluate interpolated function on the new time axis
+                y_new = ipo(x_new) #evaluate
+                #Total voltage
+                ieq_arr = np.add(ieq_arr, y_new)
+            ieq_arr = np.divide(ieq_arr, 4.7) #from V to ieq (uA)
 
-            ## Creating an extendend version of previous graphs, covering the whole time range
-            ## and with points spaced no more than granularity
-            for index,graph in enumerate(fetched_graph):
-                new_graph_point = 0
-                previous_x = firstTimestamp
-                previous_y = firstY[index]
-                # Extending backward
-                for point in range(0,graph.GetN()):
-                    graph.GetPoint(point,temp_x,temp_y)
+            ## infer HV set as most frequent value
+            ieq_arr_rounded = np.rint(ieq_arr)
+            values, counts = np.unique(ieq_arr_rounded, return_counts=True)
+            ind = np.argmax(counts)
+            #print 'Chamber GE11', SC_ID, 'was set at ', values[ind], ' uA' #the most frequent element
+            if abs(desiredIeq-values[ind])>5: print 'Warning: HV set is different than argument'
 
-                    if temp_x - previous_x <= granularity:
-                        newGraph[index].SetPoint(new_graph_point,temp_x,temp_y)
-                        new_graph_point+=1
-                    else:
-                        for i in range(int((temp_x-previous_x)/granularity)):
-                            newGraph[index].SetPoint(new_graph_point,previous_x+i*granularity,previous_y)
-                            new_graph_point+=1
-
-                    previous_x = float(temp_x)
-                    previous_y = float(temp_y)
-                # Extending forward
-                for i in range(int((lastTimestamp-previous_x)/granularity)):
-                    newGraph[index].SetPoint(new_graph_point,previous_x+i*granularity,previous_y)
-                    new_graph_point+=1
-
-
-            ## Generating the final plot
-            for i in range(int((lastTimestamp - firstTimestamp )/granularity)):
-                next_Timestamp = firstTimestamp + i*granularity
-
-                evaluatedVoltages = [graph.Eval(next_Timestamp) if  next_Timestamp>= firstX[index] else firstY[index] for index,graph in  enumerate(newGraph)]
-
-                stackedVoltage = sum(evaluatedVoltages)
-                ieq = stackedVoltage/4.7
-
-                if next_Timestamp > RunStart_TimeStamp_UTC and next_Timestamp < RunStop_TimeStamp_UTC and abs(ieq - desiredIeq) >= 5:
-                    LS = int(UTCtime_2_LS(next_Timestamp,RunStart_TimeStamp_UTC))
+            ## looking for drops in ieq and storing time in LS
+            for i,x in enumerate(x_new):
+                ieq_graph[SC_ID].SetPoint(i,x,ieq_arr[i])
+                if x > RunStart_TimeStamp_UTC and x < RunStop_TimeStamp_UTC and abs(ieq_arr[i] - desiredIeq) >= 5:
+                    LS = int(UTCtime_2_LS(x,RunStart_TimeStamp_UTC))
                     MaskDict[ChID_L1].append(LS)
                     MaskDict[ChID_L2].append(LS)
 
-                ieq_graph[SC_ID].SetPoint(i,next_Timestamp,ieq)
-
-
+            ##TGraph
             ieq_graph[SC_ID].SetTitle(SC_ID)
             ieq_graph[SC_ID].SetName(SC_ID)
             ieq_graph[SC_ID].GetYaxis().SetTitle("Equivalent Divider Current (uA)")
