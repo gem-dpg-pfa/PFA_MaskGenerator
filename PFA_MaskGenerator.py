@@ -48,11 +48,11 @@ __status__ = "DevelopAlpha"
 __comment__ = "Developed on (another) rainy day"
 
 
-
 def ReChLa2chamberName(re,ch,la):
     endcap = "M" if re == -1 else "P"
     size = "S" if ch%2 == 1 else "L"
-    chID = 'GE11-'+endcap+'-%02d' % ch +"L"+str(la)+"-"+size 
+    layer = "L"+str(la) if (la==1 or la==2) else ""
+    chID = 'GE11-'+endcap+'-%02d' % ch +layer+"-"+size 
     return chID
 
 def UTCtime_2_LS(UTC_timestamp,RunStart_TimeStamp):
@@ -89,20 +89,22 @@ def writeToTFile(file,obj,directory=None):
 
 parser = argparse.ArgumentParser(
         description='''Scripts that generates chamber mask file for PFA Efficiency analyzer for a given run.\nIf for a given LS a chamber has Ieq != Ieq_Expected it will be listed in the OutputFile --> ChamberOFF_Run_<RunNumber>.json.\nThe scripts interrogates DCS and DQM to fetch the run conditions''',
-        epilog="""Typical exectuion\n\t python PFA_MaskGenerator.py  --RunNumberList 344681 344680 344679  --ieq_expected_list 690 690 700""",
+        epilog="""Typical execution\n\t python PFA_MaskGenerator.py  --RunNumberList 344681 344680 344679  --ieq_expected_list 690 690 700""",
         formatter_class=RawTextHelpFormatter
 )
 
 parser.add_argument('-rl','--RunNumberList', type=int,help="Run Number List ",required=True,nargs='*')
-parser.add_argument('-iexpl','--ieq_expected_list', type=int,help="Expected list of ieq for the run list",required=True,nargs='*')
+parser.add_argument('-iexpl','--ieq_expected_list', type=int,help="Expected list of ieq for the run list",nargs='*')
 parser.add_argument('-rDCS','--recreateDCS', help="Force DCS rootfile recreation")
 args = parser.parse_args()
 
 ROOT.gROOT.SetBatch(True)
 
 ## Inputs
-DesiredIeqList = args.ieq_expected_list
 RunNumberList = args.RunNumberList
+if(args.ieq_expected_list):
+    DesiredIeqList = args.ieq_expected_list
+else: DesiredIeqList = [0.0] * len(RunNumberList)
 SECONDS_PER_LUMISECTION = 23.3
 granularity = 20 # max delta t between 2 points --> has to be less than SECONDS_PER_LUMISECTION
 ## End Inputs
@@ -219,6 +221,9 @@ for RunNumber in RunNumberList:
     ieq_graph = {}
     runStart_TLine = {}
     runStop_TLine = {}
+    x_all = {}
+    y_all = {}
+    HV_set = {}
 
     c_positive_encap = ROOT.TCanvas("Positive Endcap","Positive Endcap",1600,900)
     c_negative_encap = ROOT.TCanvas("Negative Endcap","Negative Endcap",1600,900)
@@ -226,18 +231,18 @@ for RunNumber in RunNumberList:
     c_negative_encap.Divide(6,6)
     OutF = ROOT.TFile("./HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
 
+    SC_ID_list = []
+
     ##Step 3: Looping over all SCs and stire LS for which Ieq != IeqDesired in the MaskDict
     for endcap in [1,-1]:
         for ch_n in range(1,37):
             ch = '%02d' %ch_n
             region_string = "_M" if endcap == -1 else "_P"
-            SC_ID = "SC GE"+region_string+ch
+            #SC_ID = "SC GE"+region_string+ch
+            SC_ID = ReChLa2chamberName(endcap,ch_n,0)
+            SC_ID_list.append(SC_ID)
 
-            ChID_L1 = ReChLa2chamberName(endcap,ch_n,1)
-            ChID_L2 = ReChLa2chamberName(endcap,ch_n,2)        
-
-            MaskDict.setdefault(ChID_L1,[])
-            MaskDict.setdefault(ChID_L2,[])
+            MaskDict.setdefault(SC_ID,[])
             ieq_graph[SC_ID] = ROOT.TGraph()
             runStart_TLine[SC_ID] = ROOT.TLine(RunStart_TimeStamp_UTC,0,RunStart_TimeStamp_UTC,750)
             runStop_TLine[SC_ID] = ROOT.TLine(RunStop_TimeStamp_UTC,0,RunStop_TimeStamp_UTC,750)
@@ -300,73 +305,82 @@ for RunNumber in RunNumberList:
                 ieq_arr = np.add(ieq_arr, y_new)
             ieq_arr = np.divide(ieq_arr, 4.7) #from V to ieq (uA)
 
+            x_all[SC_ID] = x_new
+            y_all[SC_ID] = ieq_arr
+
             ## infer HV set as most frequent value
             ieq_arr_rounded = np.rint(ieq_arr)
             values, counts = np.unique(ieq_arr_rounded, return_counts=True)
             ind = np.argmax(counts)
+            HV_set[SC_ID] = values[ind]
             #print 'Chamber GE11', SC_ID, 'was set at ', values[ind], ' uA' #the most frequent element
-            if abs(desiredIeq-values[ind])>5: print 'Warning: HV set is different than argument'
 
-            ## looking for drops in ieq and storing time in LS
-            for i,x in enumerate(x_new):
-                ieq_graph[SC_ID].SetPoint(i,x,ieq_arr[i])
-                if x > RunStart_TimeStamp_UTC and x < RunStop_TimeStamp_UTC and abs(ieq_arr[i] - desiredIeq) >= 5:
-                    LS = int(UTCtime_2_LS(x,RunStart_TimeStamp_UTC))
-                    MaskDict[ChID_L1].append(LS)
-                    MaskDict[ChID_L2].append(LS)
+    # Infer HV set as most frequent value across all chambers
+    HV_val, counts = np.unique(HV_set.values(), return_counts=True)
+    ind = np.argmax(counts)
+    print 'General HV setting on run ', RunNumber,' was ', HV_val[ind]
 
-            ##TGraph
-            ieq_graph[SC_ID].SetTitle(SC_ID)
-            ieq_graph[SC_ID].SetName(SC_ID)
-            ieq_graph[SC_ID].GetYaxis().SetTitle("Equivalent Divider Current (uA)")
-            ieq_graph[SC_ID].GetXaxis().SetTitle("UTC Date Time")
-            ieq_graph[SC_ID].GetXaxis().SetTitleOffset(1.35)
-            ieq_graph[SC_ID].SetMarkerStyle(20)
-            ieq_graph[SC_ID].SetMinimum(0)
-            ieq_graph[SC_ID].SetMaximum(750)
-            ieq_graph[SC_ID].GetXaxis().SetTimeDisplay(1)
-            ieq_graph[SC_ID].GetXaxis().SetNdivisions(-503)
-            ieq_graph[SC_ID].GetXaxis().SetLabelOffset(0.025)
-            ieq_graph[SC_ID].GetXaxis().SetLabelSize(0.02)
-            ieq_graph[SC_ID].GetXaxis().SetTimeFormat("#splitline{%y-%m-%d}{%H:%M:%S}%F1970-01-01 00:00:00")
-            ieq_graph[SC_ID].GetXaxis().SetTimeOffset(0,"UTC")
+    #unless explicitly set, reference Ieq will be taken from DCS
+    if args.ieq_expected_list is None: desiredIeq = HV_val[ind]
 
-            runStart_TLine[SC_ID].SetLineColor(ROOT.kGreen +2)
-            runStop_TLine[SC_ID].SetLineColor(ROOT.kRed)
+    ch_n = 0
+    for SC_ID in SC_ID_list:
+        ch_n+=1
+        x_ch = x_all[SC_ID]       
+        y_ch = y_all[SC_ID]       
+        ## looking for drops in ieq and storing time in LS
+        for i,x in enumerate(x_ch):
+            ieq_graph[SC_ID].SetPoint(i,x,y_ch[i])
+            if x > RunStart_TimeStamp_UTC and x < RunStop_TimeStamp_UTC and abs(y_ch[i] - desiredIeq) >= 5:
+                LS = int(UTCtime_2_LS(x,RunStart_TimeStamp_UTC))
+                MaskDict[SC_ID].append(LS)
 
-            writeToTFile(OutF,ieq_graph[SC_ID],"SCs")
+        ##TGraph
+        ieq_graph[SC_ID].SetTitle(SC_ID)
+        ieq_graph[SC_ID].SetName(SC_ID)
+        ieq_graph[SC_ID].GetYaxis().SetTitle("Equivalent Divider Current (uA)")
+        ieq_graph[SC_ID].GetXaxis().SetTitle("UTC Date Time")
+        ieq_graph[SC_ID].GetXaxis().SetTitleOffset(1.35)
+        ieq_graph[SC_ID].SetMarkerStyle(20)
+        ieq_graph[SC_ID].SetMinimum(0)
+        ieq_graph[SC_ID].SetMaximum(750)
+        ieq_graph[SC_ID].GetXaxis().SetTimeDisplay(1)
+        ieq_graph[SC_ID].GetXaxis().SetNdivisions(-503)
+        ieq_graph[SC_ID].GetXaxis().SetLabelOffset(0.025)
+        ieq_graph[SC_ID].GetXaxis().SetLabelSize(0.02)
+        ieq_graph[SC_ID].GetXaxis().SetTimeFormat("#splitline{%y-%m-%d}{%H:%M:%S}%F1970-01-01 00:00:00")
+        ieq_graph[SC_ID].GetXaxis().SetTimeOffset(0,"UTC")
 
-            if endcap == 1:
-                print SC_ID
-                pad = c_positive_encap.cd(ch_n)
-                ieq_graph[SC_ID].Draw("AP")
-                runStart_TLine[SC_ID].Draw()
-                runStop_TLine[SC_ID].Draw()
-                c_positive_encap.Modified()
-                c_positive_encap.Update()
-            if endcap == -1:
-                print SC_ID
-                pad = c_negative_encap.cd(ch_n)
-                ieq_graph[SC_ID].Draw("AP")
-                runStart_TLine[SC_ID].Draw()
-                runStop_TLine[SC_ID].Draw()
-                c_negative_encap.Modified()
-                c_negative_encap.Update()
+        runStart_TLine[SC_ID].SetLineColor(ROOT.kGreen +2)
+        runStop_TLine[SC_ID].SetLineColor(ROOT.kRed)
 
-            ## Remove duplicate LSs
-            MaskDict[ChID_L1] = list(set(MaskDict[ChID_L1]))
-            MaskDict[ChID_L2] = list(set(MaskDict[ChID_L2]))
-            ## If always bad, put -1
-            if len(MaskDict[ChID_L1]) == N_LumiSection:
-                MaskDict[ChID_L1] = [-1]
-            if len(MaskDict[ChID_L2]) == N_LumiSection:
-                MaskDict[ChID_L2] = [-1]
+        writeToTFile(OutF,ieq_graph[SC_ID],"SCs")
+
+        if endcap == 1:
+            print SC_ID
+            pad = c_positive_encap.cd(ch_n)
+            ieq_graph[SC_ID].Draw("AP")
+            runStart_TLine[SC_ID].Draw()
+            runStop_TLine[SC_ID].Draw()
+            c_positive_encap.Modified()
+            c_positive_encap.Update()
+        if endcap == -1:
+            print SC_ID
+            pad = c_negative_encap.cd(ch_n)
+            ieq_graph[SC_ID].Draw("AP")
+            runStart_TLine[SC_ID].Draw()
+            runStop_TLine[SC_ID].Draw()
+            c_negative_encap.Modified()
+            c_negative_encap.Update()
+
+        ## Remove duplicate LSs
+        MaskDict[SC_ID] = list(set(MaskDict[SC_ID]))
+        ## If always bad, put -1
+        if len(MaskDict[SC_ID]) == N_LumiSection:
+            MaskDict[SC_ID] = [-1]
     ##End of Step 3
 
-
     ##Step 4: Store output files
-    writeToTFile(OutF,runStart_TLine[SC_ID],"SCs")
-    writeToTFile(OutF,runStop_TLine[SC_ID],"SCs")
     writeToTFile(OutF,c_negative_encap)
     writeToTFile(OutF,c_positive_encap)
 
