@@ -89,21 +89,21 @@ def writeToTFile(file,obj,directory=None):
 
 parser = argparse.ArgumentParser(
         description='''Scripts that generates chamber mask file for PFA Efficiency analyzer for a given run.\nIf for a given LS a chamber has Ieq != Ieq_Expected it will be listed in the OutputFile --> ChamberOFF_Run_<RunNumber>.json.\nThe scripts interrogates DCS and DQM to fetch the run conditions''',
-        epilog="""Typical execution\n\t python PFA_MaskGenerator.py  --RunNumberList 344681 344680 344679  --ieq_expected_list 690 690 700""",
+        epilog="""Typical execution\n\t python PFA_MaskGenerator.py  -r 344681,344680,344679  --ieq_expected_list 700,700,700""",
         formatter_class=RawTextHelpFormatter
 )
 
-parser.add_argument('-rl','--RunNumberList', type=int,help="Run Number List ",required=True,nargs='*')
-parser.add_argument('-iexpl','--ieq_expected_list', type=int,help="Expected list of ieq for the run list",nargs='*')
+parser.add_argument('-r', '--run', type=str,help="Comma separated list of Cosmic runs to be analyzed",required=True)
+parser.add_argument('-iexpl','--ieq_expected_list', type=str,help="Comma separated list of expected ieq values (one value for each run is expected)")
 parser.add_argument('-rDCS','--recreateDCS', help="Force DCS rootfile recreation")
 args = parser.parse_args()
 
 ROOT.gROOT.SetBatch(True)
 
 ## Inputs
-RunNumberList = args.RunNumberList
+RunNumberList = map(str, args.run.split(','))
 if(args.ieq_expected_list):
-    DesiredIeqList = args.ieq_expected_list
+    DesiredIeqList = map(str, args.ieq_expected_list.split(','))
 else: DesiredIeqList = [0.0] * len(RunNumberList)
 SECONDS_PER_LUMISECTION = 23.3
 granularity = 20 # max delta t between 2 points --> has to be less than SECONDS_PER_LUMISECTION
@@ -145,7 +145,7 @@ os.system("rm Temp_ListOfDQMurls.txt")
 
 ## Produce output file for all Runs
 for RunNumber in RunNumberList:
-    desiredIeq = Run2DesiredIeq[RunNumber]
+    desiredIeq = int(Run2DesiredIeq[RunNumber])
     DQM_FileName = Run2DQM_FileName[RunNumber]
     
     try:
@@ -172,9 +172,9 @@ for RunNumber in RunNumberList:
 
     RunStart_Datetime_UTC,RunStart_TimeStamp_UTC = BerlinTime_2_UTC(RunStart_Datetime_CET)
     RunStop_Datetime_UTC,RunStop_TimeStamp_UTC = BerlinTime_2_UTC(RunStop_Datetime_CET)
+    #Insert here new feature: ERRRORS FROM DQM FILE
     # deleting DQM_File
     os.system("rm "+DQM_FileName)
-
     ## End of Step 1
 
 
