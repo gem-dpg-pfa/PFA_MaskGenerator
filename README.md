@@ -1,5 +1,5 @@
 # PFA_MaskGenerator
-Tool that generates the chamber masking file for PFA Efficiency analyzer
+### Tool that generates the chamber masking file for PFA Efficiency analyzer
 ------
 
 ## Requirements
@@ -7,7 +7,7 @@ Tool that generates the chamber masking file for PFA Efficiency analyzer
    How to obtain the certificate: [twiki](https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid#ObtainingCert).
    Make sure you place the p12 certificate file in the `.globus` directory of your `lxplus` home area.
 
-2. A working copy of [P5GEMOfflineMonitor tool](https://github.com/gem-dpg-pfa/P5GEMOfflineMonitor) under the env var *$DCS_TOOL*
+2. A working copy of [P5GEMOfflineMonitor tool](https://github.com/gem-dpg-pfa/P5GEMOfflineMonitor) under the env var *$DCS_TOOL*.
    The ouput files of P5GEMOfflineMonitor tool are expected to be found under *$DCS_TOOL/OutputFiles*
    
 3. Python libraries:
