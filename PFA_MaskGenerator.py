@@ -32,7 +32,10 @@ import os
 import re
 import pytz
 import sys
-
+import ctypes
+import numpy as np
+import scipy.interpolate as sp
+import matplotlib.pyplot as plt
 
 __author__ = "Francesco Ivone"
 __copyright__ = "Copyright 2021, CMS GEM"
@@ -45,11 +48,11 @@ __status__ = "DevelopAlpha"
 __comment__ = "Developed on (another) rainy day"
 
 
-
 def ReChLa2chamberName(re,ch,la):
     endcap = "M" if re == -1 else "P"
     size = "S" if ch%2 == 1 else "L"
-    chID = 'GE11-'+endcap+'-%02d' % ch +"L"+str(la)+"-"+size 
+    layer = "L"+str(la) if (la==1 or la==2) else ""
+    chID = 'GE11-'+endcap+'-%02d' % ch +layer+"-"+size 
     return chID
 
 def UTCtime_2_LS(UTC_timestamp,RunStart_TimeStamp):
@@ -86,20 +89,23 @@ def writeToTFile(file,obj,directory=None):
 
 parser = argparse.ArgumentParser(
         description='''Scripts that generates chamber mask file for PFA Efficiency analyzer for a given run.\nIf for a given LS a chamber has Ieq != Ieq_Expected it will be listed in the OutputFile --> ChamberOFF_Run_<RunNumber>.json.\nThe scripts interrogates DCS and DQM to fetch the run conditions''',
-        epilog="""Typical exectuion\n\t python PFA_MaskGenerator.py  --RunNumberList 344681 344680 344679  --ieq_expected_list 690 690 700""",
+        epilog="""Typical execution\n\t python PFA_MaskGenerator.py  -r 344681,344680,344679  --ieq_expected_list 700,700,700""",
         formatter_class=RawTextHelpFormatter
 )
 
-parser.add_argument('-rl','--RunNumberList', type=int,help="Run Number List ",required=True,nargs='*')
-parser.add_argument('-iexpl','--ieq_expected_list', type=int,help="Expected list of ieq for the run list",required=True,nargs='*')
+parser.add_argument('-r', '--run', type=str,help="Comma separated list of Cosmic runs to be analyzed",required=True)
+parser.add_argument('-iexpl','--ieq_expected_list', type=str,help="Comma separated list of expected ieq values (one value for each run is expected)")
+parser.add_argument('-rDCS','--recreateDCS', help="Force DCS rootfile recreation")
 args = parser.parse_args()
 
 ROOT.gROOT.SetBatch(True)
 
 ## Inputs
-DesiredIeqList = args.ieq_expected_list
-RunNumberList = args.RunNumberList
-SECONDS_PER_LUMISECTION = 24
+RunNumberList = map(str, args.run.split(','))
+if(args.ieq_expected_list):
+    DesiredIeqList = map(str, args.ieq_expected_list.split(','))
+else: DesiredIeqList = [0.0] * len(RunNumberList)
+SECONDS_PER_LUMISECTION = 23.3
 granularity = 20 # max delta t between 2 points --> has to be less than SECONDS_PER_LUMISECTION
 ## End Inputs
 
@@ -120,10 +126,8 @@ for index,RunNumber in enumerate(RunNumberList):
     DQM_FileName = "DQM_V0001_GEM_R000"+str(RunNumber)+".root"
     Run2DesiredIeq[RunNumber] = DesiredIeqList[index]
     Run2DQM_FileName[RunNumber] = DQM_FileName
-
     RunNumber_MSDigits2 = str(RunNumber)[:2]+"xxxx"
     RunNumber_MSDigits4 = str(RunNumber)[:4]+"xx"
-
     temp_txt = open('Temp_ListOfDQMurls.txt', 'a')
     url = "https://cmsweb.cern.ch/dqm/offline/data/browse/ROOT/OnlineData/original/000"+RunNumber_MSDigits2+"/000"+RunNumber_MSDigits4+"/"+DQM_FileName+"\n"
     temp_txt.write(url)
@@ -141,7 +145,7 @@ os.system("rm Temp_ListOfDQMurls.txt")
 
 ## Produce output file for all Runs
 for RunNumber in RunNumberList:
-    desiredIeq = Run2DesiredIeq[RunNumber]
+    desiredIeq = int(Run2DesiredIeq[RunNumber])
     DQM_FileName = Run2DQM_FileName[RunNumber]
     
     try:
@@ -168,9 +172,9 @@ for RunNumber in RunNumberList:
 
     RunStart_Datetime_UTC,RunStart_TimeStamp_UTC = BerlinTime_2_UTC(RunStart_Datetime_CET)
     RunStop_Datetime_UTC,RunStop_TimeStamp_UTC = BerlinTime_2_UTC(RunStop_Datetime_CET)
+    #Insert here new feature: ERRRORS FROM DQM FILE
     # deleting DQM_File
     os.system("rm "+DQM_FileName)
-
     ## End of Step 1
 
 
@@ -184,10 +188,12 @@ for RunNumber in RunNumberList:
     print "\n## Fetching DCS file ..."
     DCS_TOOL_folder = os.getenv("DCS_TOOL")
     DCS_dump_file = DCS_TOOL_folder+"/OutputFiles/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
-    cmd = "python "+DCS_TOOL_folder+"/GEMDCSP5Monitor.py "+DayBefore_RunStart_Datetime_UTC +" "+ DayAfter_RunStop_Datetime_UTC +" HV 0 -c all"
-    print cmd
-    os.system(cmd)
-    DCS_dump_file = DCS_TOOL_folder+"/OutputFiles/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
+    if os.path.isfile(DCS_dump_file) and (args.recreateDCS is None):
+        print DCS_dump_file, "already exists\n"
+    else:
+        cmd = "python "+DCS_TOOL_folder+"/GEMDCSP5Monitor.py "+DayBefore_RunStart_Datetime_UTC +" "+ DayAfter_RunStop_Datetime_UTC +" HV 0 -c all"
+        print cmd
+        os.system(cmd)
     print "\n## Fetch COMPLETE"
     ## End of Step 2
 
@@ -215,6 +221,9 @@ for RunNumber in RunNumberList:
     ieq_graph = {}
     runStart_TLine = {}
     runStop_TLine = {}
+    x_all = {}
+    y_all = {}
+    HV_set = {}
 
     c_positive_encap = ROOT.TCanvas("Positive Endcap","Positive Endcap",1600,900)
     c_negative_encap = ROOT.TCanvas("Negative Endcap","Negative Endcap",1600,900)
@@ -222,18 +231,18 @@ for RunNumber in RunNumberList:
     c_negative_encap.Divide(6,6)
     OutF = ROOT.TFile("./HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
 
+    SC_ID_list = []
+
     ##Step 3: Looping over all SCs and stire LS for which Ieq != IeqDesired in the MaskDict
     for endcap in [1,-1]:
         for ch_n in range(1,37):
             ch = '%02d' %ch_n
-            region_string = "_" if endcap == -1 else "+"
-            SC_ID = "SC GE"+region_string+ch
+            region_string = "_M" if endcap == -1 else "_P"
+            #SC_ID = "SC GE"+region_string+ch
+            SC_ID = ReChLa2chamberName(endcap,ch_n,0)
+            SC_ID_list.append(SC_ID)
 
-            ChID_L1 = ReChLa2chamberName(endcap,ch_n,1)
-            ChID_L2 = ReChLa2chamberName(endcap,ch_n,2)        
-
-            MaskDict.setdefault(ChID_L1,[])
-            MaskDict.setdefault(ChID_L2,[])
+            MaskDict.setdefault(SC_ID,[])
             ieq_graph[SC_ID] = ROOT.TGraph()
             runStart_TLine[SC_ID] = ROOT.TLine(RunStart_TimeStamp_UTC,0,RunStart_TimeStamp_UTC,750)
             runStop_TLine[SC_ID] = ROOT.TLine(RunStop_TimeStamp_UTC,0,RunStop_TimeStamp_UTC,750)
@@ -267,120 +276,111 @@ for RunNumber in RunNumberList:
                 print "Skipping ", SC_ID
                 continue
 
-
-            firstX = [ ROOT.Double() for i in range(0,7)]
-            firstY = [ ROOT.Double() for i in range(0,7)]
-            lastX = [ ROOT.Double() for i in range(0,7)]
-            lastY = [ ROOT.Double() for i in range(0,7)]
-            newGraph = [ROOT.TGraph() for i in range(0,7)]
-            temp_x, temp_y = ROOT.Double(),ROOT.Double()
-
-
-            ## Evaluating widest range in which at least 1 of the channels has data
+            x_list = []
+            y_list = []
+            ## Fetching TGraphs as numpy arrays
             for index,graph in enumerate(fetched_graph):
-                graph.GetPoint(0,firstX[index],firstY[index])
-                graph.GetPoint(graph.GetN()-1,lastX[index],lastY[index])
+                # Create buffers
+                x_buff, N = graph.GetX(), graph.GetN()
+                y_buff, N = graph.GetY(), graph.GetN()
+                # Convert to numpy arrays
+                x_arr = np.array(np.frombuffer(x_buff, dtype=np.double))
+                y_arr = np.array(np.frombuffer(y_buff, dtype=np.double))
+                x_list.append(x_arr)
+                y_list.append(y_arr)
 
-                previous_x = firstX[index]
-                previous_y = firstY[index]
+            ##create common x axis using min and max time across all channels 
+            time_min = min (np.min(t) for t in x_list)
+            time_max = max (np.max(t) for t in x_list)
+            time_N = int((time_max-time_min)/granularity)
+            x_new = np.linspace(time_min, time_max, time_N)  # the new x axis with desired granularity
 
-            lastTimestamp = max(lastX)
-            firstTimestamp = min(firstX)
+            ieq_arr = np.zeros_like(x_new) #zeros array with same shape as time axis
+            for x_arr,y_arr in zip(x_list, y_list):
+                #interpolate existing data using nearest neighbor (in our case, previous point)
+                ipo = sp.interp1d(x_arr, y_arr, kind='previous', fill_value=(y_arr[0], y_arr[-1]), bounds_error=False) #extrapolation at bounds: use first and last HV point
+                #evaluate interpolated function on the new time axis
+                y_new = ipo(x_new) #evaluate
+                #Total voltage
+                ieq_arr = np.add(ieq_arr, y_new)
+            ieq_arr = np.divide(ieq_arr, 4.7) #from V to ieq (uA)
 
-            ## Creating an extendend version of previous graphs, covering the whole time range
-            ## and with points spaced no more than granularity
-            for index,graph in enumerate(fetched_graph):
-                new_graph_point = 0
-                previous_x = firstTimestamp
-                previous_y = firstY[index]
-                # Extending backward
-                for point in range(0,graph.GetN()):
-                    graph.GetPoint(point,temp_x,temp_y)
+            x_all[SC_ID] = x_new
+            y_all[SC_ID] = ieq_arr
 
-                    if temp_x - previous_x <= granularity:
-                        newGraph[index].SetPoint(new_graph_point,temp_x,temp_y)
-                        new_graph_point+=1
-                    else:
-                        for i in range(int((temp_x-previous_x)/granularity)):
-                            newGraph[index].SetPoint(new_graph_point,previous_x+i*granularity,previous_y)
-                            new_graph_point+=1
+            ## infer HV set as most frequent value
+            ieq_arr_rounded = np.rint(ieq_arr)
+            values, counts = np.unique(ieq_arr_rounded, return_counts=True)
+            ind = np.argmax(counts)
+            HV_set[SC_ID] = values[ind]
+            #print 'Chamber GE11', SC_ID, 'was set at ', values[ind], ' uA' #the most frequent element
 
-                    previous_x = float(temp_x)
-                    previous_y = float(temp_y)
-                # Extending forward
-                for i in range(int((lastTimestamp-previous_x)/granularity)):
-                    newGraph[index].SetPoint(new_graph_point,previous_x+i*granularity,previous_y)
-                    new_graph_point+=1
+    # Infer HV set as most frequent value across all chambers
+    HV_val, counts = np.unique(HV_set.values(), return_counts=True)
+    ind = np.argmax(counts)
+    print 'General HV setting on run ', RunNumber,' was ', HV_val[ind]
 
+    #unless explicitly set, reference Ieq will be taken from DCS
+    if args.ieq_expected_list is None: desiredIeq = HV_val[ind]
 
-            ## Generating the final plot
-            for i in range(int((lastTimestamp - firstTimestamp )/granularity)):
-                next_Timestamp = firstTimestamp + i*granularity
+    ch_n = 0
+    for SC_ID in SC_ID_list:
+        ch_n+=1
+        x_ch = x_all[SC_ID]       
+        y_ch = y_all[SC_ID]       
+        ## looking for drops in ieq and storing time in LS
+        for i,x in enumerate(x_ch):
+            ieq_graph[SC_ID].SetPoint(i,x,y_ch[i])
+            if x > RunStart_TimeStamp_UTC and x < RunStop_TimeStamp_UTC and abs(y_ch[i] - desiredIeq) >= 5:
+                LS = int(UTCtime_2_LS(x,RunStart_TimeStamp_UTC))
+                MaskDict[SC_ID].append(LS)
 
-                evaluatedVoltages = [graph.Eval(next_Timestamp) if  next_Timestamp>= firstX[index] else firstY[index] for index,graph in  enumerate(newGraph)]
+        ##TGraph
+        ieq_graph[SC_ID].SetTitle(SC_ID)
+        ieq_graph[SC_ID].SetName(SC_ID)
+        ieq_graph[SC_ID].GetYaxis().SetTitle("Equivalent Divider Current (uA)")
+        ieq_graph[SC_ID].GetXaxis().SetTitle("UTC Date Time")
+        ieq_graph[SC_ID].GetXaxis().SetTitleOffset(1.35)
+        ieq_graph[SC_ID].SetMarkerStyle(20)
+        ieq_graph[SC_ID].SetMinimum(0)
+        ieq_graph[SC_ID].SetMaximum(750)
+        ieq_graph[SC_ID].GetXaxis().SetTimeDisplay(1)
+        ieq_graph[SC_ID].GetXaxis().SetNdivisions(-503)
+        ieq_graph[SC_ID].GetXaxis().SetLabelOffset(0.025)
+        ieq_graph[SC_ID].GetXaxis().SetLabelSize(0.02)
+        ieq_graph[SC_ID].GetXaxis().SetTimeFormat("#splitline{%y-%m-%d}{%H:%M:%S}%F1970-01-01 00:00:00")
+        ieq_graph[SC_ID].GetXaxis().SetTimeOffset(0,"UTC")
 
-                stackedVoltage = sum(evaluatedVoltages)
-                ieq = stackedVoltage/4.7
+        runStart_TLine[SC_ID].SetLineColor(ROOT.kGreen +2)
+        runStop_TLine[SC_ID].SetLineColor(ROOT.kRed)
 
-                if next_Timestamp > RunStart_TimeStamp_UTC and next_Timestamp < RunStop_TimeStamp_UTC and abs(ieq - desiredIeq) >= 5:
-                    LS = int(UTCtime_2_LS(next_Timestamp,RunStart_TimeStamp_UTC))
-                    MaskDict[ChID_L1].append(LS)
-                    MaskDict[ChID_L2].append(LS)
+        writeToTFile(OutF,ieq_graph[SC_ID],"SCs")
 
-                ieq_graph[SC_ID].SetPoint(i,next_Timestamp,ieq)
+        if endcap == 1:
+            print SC_ID
+            pad = c_positive_encap.cd(ch_n)
+            ieq_graph[SC_ID].Draw("AP")
+            runStart_TLine[SC_ID].Draw()
+            runStop_TLine[SC_ID].Draw()
+            c_positive_encap.Modified()
+            c_positive_encap.Update()
+        if endcap == -1:
+            print SC_ID
+            pad = c_negative_encap.cd(ch_n)
+            ieq_graph[SC_ID].Draw("AP")
+            runStart_TLine[SC_ID].Draw()
+            runStop_TLine[SC_ID].Draw()
+            c_negative_encap.Modified()
+            c_negative_encap.Update()
 
-
-            ieq_graph[SC_ID].SetTitle(SC_ID)
-            ieq_graph[SC_ID].SetName(SC_ID)
-            ieq_graph[SC_ID].GetYaxis().SetTitle("Equivalent Divider Current (uA)")
-            ieq_graph[SC_ID].GetXaxis().SetTitle("UTC Date Time")
-            ieq_graph[SC_ID].GetXaxis().SetTitleOffset(1.35)
-            ieq_graph[SC_ID].SetMarkerStyle(20)
-            ieq_graph[SC_ID].SetMinimum(0)
-            ieq_graph[SC_ID].SetMaximum(750)
-            ieq_graph[SC_ID].GetXaxis().SetTimeDisplay(1)
-            ieq_graph[SC_ID].GetXaxis().SetNdivisions(-503)
-            ieq_graph[SC_ID].GetXaxis().SetLabelOffset(0.025)
-            ieq_graph[SC_ID].GetXaxis().SetLabelSize(0.02)
-            ieq_graph[SC_ID].GetXaxis().SetTimeFormat("#splitline{%y-%m-%d}{%H:%M:%S}%F1970-01-01 00:00:00")
-            ieq_graph[SC_ID].GetXaxis().SetTimeOffset(0,"UTC")
-
-            runStart_TLine[SC_ID].SetLineColor(ROOT.kGreen +2)
-            runStop_TLine[SC_ID].SetLineColor(ROOT.kRed)
-
-            writeToTFile(OutF,ieq_graph[SC_ID],"SCs")
-
-            if endcap == 1:
-                print SC_ID
-                pad = c_positive_encap.cd(ch_n)
-                ieq_graph[SC_ID].Draw("AP")
-                runStart_TLine[SC_ID].Draw()
-                runStop_TLine[SC_ID].Draw()
-                c_positive_encap.Modified()
-                c_positive_encap.Update()
-            if endcap == -1:
-                print SC_ID
-                pad = c_negative_encap.cd(ch_n)
-                ieq_graph[SC_ID].Draw("AP")
-                runStart_TLine[SC_ID].Draw()
-                runStop_TLine[SC_ID].Draw()
-                c_negative_encap.Modified()
-                c_negative_encap.Update()
-
-            ## Remove duplicate LSs
-            MaskDict[ChID_L1] = list(set(MaskDict[ChID_L1]))
-            MaskDict[ChID_L2] = list(set(MaskDict[ChID_L2]))
-            ## If always bad, put -1
-            if len(MaskDict[ChID_L1]) == N_LumiSection:
-                MaskDict[ChID_L1] = [-1]
-            if len(MaskDict[ChID_L2]) == N_LumiSection:
-                MaskDict[ChID_L2] = [-1]
+        ## Remove duplicate LSs
+        MaskDict[SC_ID] = list(set(MaskDict[SC_ID]))
+        ## If always bad, put -1
+        if len(MaskDict[SC_ID]) == N_LumiSection:
+            MaskDict[SC_ID] = [-1]
     ##End of Step 3
 
-
     ##Step 4: Store output files
-    writeToTFile(OutF,runStart_TLine[SC_ID],"SCs")
-    writeToTFile(OutF,runStop_TLine[SC_ID],"SCs")
     writeToTFile(OutF,c_negative_encap)
     writeToTFile(OutF,c_positive_encap)
 
