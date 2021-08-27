@@ -9,6 +9,12 @@ Tool that generates the chamber masking file for PFA Efficiency analyzer
 
 2. A working copy of [P5GEMOfflineMonitor tool](https://github.com/gem-dpg-pfa/P5GEMOfflineMonitor) under the env var *$DCS_TOOL*
    The ouput files of P5GEMOfflineMonitor tool are expected to be found under *$DCS_TOOL/OutputFiles*
+   
+3. Python libraries:
+```bash
+pip2 install  numpy==1.9.0 --user
+pip2 install  scipy==1.1.0 --user
+```
 
 ## Installation
 1. Install the [P5GEMOfflineMonitor tool](https://github.com/gem-dpg-pfa/P5GEMOfflineMonitor)
@@ -28,11 +34,23 @@ cd PFA_MaskGenerator
 python PFA_MaskGenerator.py -h
 ```
 
+## How to execute
+```bash
+cd your_working_directory/P5GEMOfflineMonitor
+source setup_DCS.sh
+cd ../PFA_MaskGenerator
+python PFA_MaskGenerator.py -r 344681,344680  --ieq_expected_list 700,700
+```
+If argument `--ieq_expected_list` is not provided, expected HV setting (equivalent divider current) is inferred from the DCS data as the value set to the majority of the 72 chambers.
+
 ## Intended WorkFlow
-* Based on Run Number, download DQM.root
-* From DQM.root, retrieve Start Run UTC time and Stop Run UTC Time
-* Based Start/Stop time retrieve DCS.root
-* Based on the Expected I eq and the DCS.root produce a JSON file containing list of chambers to be masked with LS info
+- [x] Based on Run Number, download DQM.root
+- [x] From DQM.root, retrieve Start Run UTC time and Stop Run UTC Time
+- [ ] From DQM.root, retrieve list of chambers/VFATs undergoing DAQ errors during data taking (assigned to @caruta)
+- [x] Based Start/Stop time retrieve DCS.root
+- [x] From DCS.root extract Ieq vs time for all the chambers
+- [x] Based on expected Ieq compared with effective Ieq from DCS, store timestamps corresponding to chamber off/tripping/set to low HV
+- [x] Convert time to lumisection and store in a JSON file for further analysis
 
 ## Input/Output
 This utility takes as **input**
