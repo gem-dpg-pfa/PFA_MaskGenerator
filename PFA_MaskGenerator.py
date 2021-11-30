@@ -65,7 +65,7 @@ def UTCtime_2_LS(UTC_timestamp,RunStart_TimeStamp):
 def BerlinTime_2_UTC(Berlin_Datetime):
     local = pytz.timezone("Europe/Berlin")
     local_datetime = datetime.datetime.strptime(Berlin_Datetime, "%Y-%m-%d_%H:%M:%S")
-    local_dt = local.localize(local_datetime, is_dst=None)
+    local_dt = local.localize(local_datetime, is_dst=None) #is_dst is also used to determine the correct timezone in the wallclock times jumped over at the start of daylight saving time.
     utc_dt = local_dt.astimezone(pytz.utc)
     Datetime_UTC = utc_dt.strftime("%Y-%m-%d_%H:%M:%S")
     TimeStamp_UTC = time.mktime(time.strptime(Datetime_UTC, "%Y-%m-%d_%H:%M:%S"))
@@ -140,11 +140,13 @@ os.system(cmd)
 os.system("rm Temp_ListOfDQMurls.txt")
 ## End of fetching multiple DQM.root
 
+print RunNumberList
 
 ## Produce output file for all Runs
 for RunNumber in RunNumberList:
     desiredIeq = Run2DesiredIeq[RunNumber]
     DQM_FileName = Run2DQM_FileName[RunNumber]
+    DQM_ChamberInError = []
     
     try:
         DQMFile = ROOT.TFile.Open(DQM_FileName,"READ")
@@ -153,8 +155,18 @@ for RunNumber in RunNumberList:
         sys.exit(0)
         
 
-    ## Step 1: Acquiring N_LumiSection and RunStart in Europe TimeZone and UTC
+    ## Step 1: Acquiring N_LumiSection, RunStart in Europe TimeZone and UTC and Chambers in Error/Empty
     s = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo")
+    DQMsummary = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/reportSummaryMap")
+    for y_bin in range(1,5):
+        for x_bin in range(1,37):
+            DQM_Endcap = 1 if y_bin in [1,2] else -1
+            DQM_Layer = 2  if y_bin in [1,4] else 1
+            DQM_ChamberID = ReChLa2chamberName(DQM_Endcap,x_bin,DQM_Layer)
+            ChamberStatus = DQMsummary.GetBinContent (x_bin, y_bin)
+            if ChamberStatus!=1: ### This chamber is in error or empty
+                DQM_ChamberInError.append(DQM_ChamberID)
+
     TList = s.GetListOfKeys()
     for item in TList:
         if  "iEvent" in item.GetName():
@@ -171,7 +183,7 @@ for RunNumber in RunNumberList:
     RunStart_Datetime_UTC,RunStart_TimeStamp_UTC = BerlinTime_2_UTC(RunStart_Datetime_CET)
     RunStop_Datetime_UTC,RunStop_TimeStamp_UTC = BerlinTime_2_UTC(RunStop_Datetime_CET)
     # deleting DQM_File
-    os.system("rm "+DQM_FileName)
+    #os.system("rm "+DQM_FileName)
 
     ## End of Step 1
 
@@ -287,8 +299,11 @@ for RunNumber in RunNumberList:
             ##create common x axis using min and max time across all channels 
             time_min = min (np.min(t) for t in x_list)
             time_max = max (np.max(t) for t in x_list)
+            time_max = max(time_max,RunStop_TimeStamp_UTC) ##HOT fix to avoid time_max < time_stop_run
+
             time_N = int((time_max-time_min)/granularity)
             x_new = np.linspace(time_min, time_max, time_N)  # the new x axis with desired granularity
+
 
             ieq_arr = np.zeros_like(x_new) #zeros array with same shape as time axis
             for x_arr,y_arr in zip(x_list, y_list):
@@ -300,12 +315,19 @@ for RunNumber in RunNumberList:
                 ieq_arr = np.add(ieq_arr, y_new)
             ieq_arr = np.divide(ieq_arr, 4.7) #from V to ieq (uA)
 
+            ## Refine ieq_arr and x_new arr so that they cover only the range of the run
+            Run_start_index = np.argmin(np.abs(x_new - RunStart_TimeStamp_UTC))
+            Run_stop_index = np.argmin(np.abs(x_new - RunStop_TimeStamp_UTC))
+
+            x_new = x_new[Run_start_index:Run_stop_index]
+            ieq_arr = ieq_arr[Run_start_index:Run_stop_index]
             ## infer HV set as most frequent value
             ieq_arr_rounded = np.rint(ieq_arr)
             values, counts = np.unique(ieq_arr_rounded, return_counts=True)
+            
             ind = np.argmax(counts)
             #print 'Chamber GE11', SC_ID, 'was set at ', values[ind], ' uA' #the most frequent element
-            if abs(desiredIeq-values[ind])>5: print 'Warning: HV set is different than argument'
+            if abs(desiredIeq-values[ind])>5: print 'Warning: HV set is ',values[ind],' different than argument ',desiredIeq
 
             ## looking for drops in ieq and storing time in LS
             for i,x in enumerate(x_new):
@@ -361,6 +383,10 @@ for RunNumber in RunNumberList:
                 MaskDict[ChID_L1] = [-1]
             if len(MaskDict[ChID_L2]) == N_LumiSection:
                 MaskDict[ChID_L2] = [-1]
+            ## Include Chambers in error
+            for chamber_key in DQM_ChamberInError:
+                MaskDict[chamber_key] = [-1]
+
     ##End of Step 3
 
 
