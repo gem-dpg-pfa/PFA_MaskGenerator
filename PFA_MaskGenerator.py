@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+    #!/usr/bin/env python
 """Provides a tool able to generate masking files for PFA Efficiency analyzer
    For a given Run in P5, PFA needs to know which SuperChambers were operated at the expected
    Ieq, HV trips (if any).
@@ -158,10 +158,10 @@ for RunNumber in RunNumberList:
     ## Step 1: Acquiring N_LumiSection, RunStart in Europe TimeZone and UTC and Chambers in Error/Empty
     s = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo")
     DQMsummary = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/reportSummaryMap")
-    for y_bin in range(1,5):
+    for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
-            DQM_Endcap = 1 if y_bin in [1,2] else -1
-            DQM_Layer = 2  if y_bin in [1,4] else 1
+            DQM_Endcap = 1 if y_bin in [2,3] else -1
+            DQM_Layer = 2  if y_bin in [4,5] else 1
             DQM_ChamberID = ReChLa2chamberName(DQM_Endcap,x_bin,DQM_Layer)
             ChamberStatus = DQMsummary.GetBinContent (x_bin, y_bin)
             if ChamberStatus!=1: ### This chamber is in error or empty
@@ -190,8 +190,8 @@ for RunNumber in RunNumberList:
 
     ## Step 2: Fetching DCS.root
     # Using a 24h window centered on the run to avoid DCS channels without HV points
-    DayBefore_RunStart_TimeStamp_UTC = RunStart_TimeStamp_UTC - 12*3600
-    DayAfter_RunStop_TimeStamp_UTC = RunStop_TimeStamp_UTC + 12*3600
+    DayBefore_RunStart_TimeStamp_UTC = RunStart_TimeStamp_UTC - 24*3600
+    DayAfter_RunStop_TimeStamp_UTC = RunStop_TimeStamp_UTC + 24*3600
     DayBefore_RunStart_Datetime_UTC = datetime.datetime.fromtimestamp(DayBefore_RunStart_TimeStamp_UTC).strftime('%Y-%m-%d_%H:%M:%S')
     DayAfter_RunStop_Datetime_UTC = datetime.datetime.fromtimestamp(DayAfter_RunStop_TimeStamp_UTC).strftime('%Y-%m-%d_%H:%M:%S')
 
