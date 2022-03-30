@@ -1,4 +1,4 @@
-    #!/usr/bin/env python
+#!/usr/bin/env python
 """Provides a tool able to generate masking files for PFA Efficiency analyzer
    For a given Run in P5, PFA needs to know which SuperChambers were operated at the expected
    Ieq, HV trips (if any).
@@ -127,6 +127,9 @@ for index,RunNumber in enumerate(RunNumberList):
     RunNumber_MSDigits2 = str(RunNumber)[:2]+"xxxx"
     RunNumber_MSDigits4 = str(RunNumber)[:4]+"xx"
     temp_txt = open('Temp_ListOfDQMurls.txt', 'a')
+    if os.path.isfile("./"+DQM_FileName): 
+        print DQM_FileName, "already exists\n"
+        continue
     url = "https://cmsweb.cern.ch/dqm/offline/data/browse/ROOT/OnlineData/original/000"+RunNumber_MSDigits2+"/000"+RunNumber_MSDigits4+"/"+DQM_FileName+"\n"
     temp_txt.write(url)
 temp_txt.close()
@@ -156,18 +159,19 @@ for RunNumber in RunNumberList:
         
 
     ## Step 1: Acquiring N_LumiSection, RunStart in Europe TimeZone and UTC and Chambers in Error/Empty
-    s = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo")
+    event_info = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo")
     DQMsummary = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/reportSummaryMap")
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             DQM_Endcap = 1 if y_bin in [2,3] else -1
-            DQM_Layer = 2  if y_bin in [4,5] else 1
+            DQM_Layer = 2  if y_bin in [2,5] else 1
             DQM_ChamberID = ReChLa2chamberName(DQM_Endcap,x_bin,DQM_Layer)
             ChamberStatus = DQMsummary.GetBinContent (x_bin, y_bin)
-            if ChamberStatus!=1: ### This chamber is in error or empty
+
+            if ChamberStatus!=4: ###  chamber in error or empty
                 DQM_ChamberInError.append(DQM_ChamberID)
 
-    TList = s.GetListOfKeys()
+    TList = event_info.GetListOfKeys()
     for item in TList:
         if  "iEvent" in item.GetName():
             N_Event = int(re.sub("[^0-9]", "", item.GetName())) ## removes all non digis chars
@@ -327,7 +331,7 @@ for RunNumber in RunNumberList:
             
             ind = np.argmax(counts)
             #print 'Chamber GE11', SC_ID, 'was set at ', values[ind], ' uA' #the most frequent element
-            if abs(desiredIeq-values[ind])>5: print 'Warning: HV set is ',values[ind],' different than argument ',desiredIeq
+            if abs(desiredIeq-values[ind])>5: print 'Warning: Divider current monitored is ',values[ind],' different than expected ',desiredIeq
 
             ## looking for drops in ieq and storing time in LS
             for i,x in enumerate(x_new):
