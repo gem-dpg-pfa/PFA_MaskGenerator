@@ -200,7 +200,8 @@ for RunNumber in RunList:
     DayAfter_RunStop_Datetime_UTC = datetime.datetime.fromtimestamp(DayAfter_RunStop_TimeStamp_UTC).strftime('%Y-%m-%d_%H:%M:%S')
 
     print "\n## Fetching DCS file ..."
-    DCS_TOOL_folder = os.getenv("DCS_TOOL")
+    DCS_TOOL_folder = os.getenv("DOC2_PFA")
+    DCS_TOOL_folder += "/DCS_Offline_Monitor"
     DCS_dump_file = DCS_TOOL_folder+"/OutputFiles/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
     if os.path.isfile(DCS_dump_file) and (args.recreateDCS is None):
         print DCS_dump_file, "already exists\n"
