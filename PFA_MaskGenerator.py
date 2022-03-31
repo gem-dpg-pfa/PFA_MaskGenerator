@@ -11,9 +11,9 @@
    Then the time window for Ieq != Ieq expected is derived and finally converted in LumiSection based on Run start time (UTC Format) and #LS (taken from DQM online)
 
    This utility takes as input 
-   - RunNumberList
+   - RunList
    - Expected Ieq List
-   For each run in the RunNumberList this utility produces as output 
+   For each run in the RunList this utility produces as output 
    - ChamberOFF_Run_<RunNumber>.json 
         (a JSON formatted file containing LS to mask for each chamber)
    - HV_Status_Run_<RunNumber>.root)
@@ -89,11 +89,11 @@ def writeToTFile(file,obj,directory=None):
 
 parser = argparse.ArgumentParser(
         description='''Scripts that generates chamber mask file for PFA Efficiency analyzer for a given run.\nIf for a given LS a chamber has Ieq != Ieq_Expected it will be listed in the OutputFile --> ChamberOFF_Run_<RunNumber>.json.\nThe scripts interrogates DCS and DQM to fetch the run conditions''',
-        epilog="""Typical exectuion\n\t python PFA_MaskGenerator.py  --RunNumberList 344681 344680 344679  --ieq_expected_list 690 690 700""",
+        epilog="""Typical exectuion\n\t python PFA_MaskGenerator.py  --RunList 344681 344680 344679  --ieq_expected_list 690 690 700""",
         formatter_class=RawTextHelpFormatter
 )
 
-parser.add_argument('-rl','--RunNumberList', type=int,help="Run Number List ",required=True,nargs='*')
+parser.add_argument('-rl','--RunList', type=int,help="Run Number List ",required=True,nargs='*')
 parser.add_argument('-iexpl','--ieq_expected_list', type=int,help="Expected list of ieq for the run list",required=True,nargs='*')
 parser.add_argument('-rDCS','--recreateDCS', help="Force DCS rootfile recreation")
 args = parser.parse_args()
@@ -102,15 +102,15 @@ ROOT.gROOT.SetBatch(True)
 
 ## Inputs
 DesiredIeqList = args.ieq_expected_list
-RunNumberList = args.RunNumberList
+RunList = args.RunList
 SECONDS_PER_LUMISECTION = 23.3
 granularity = 20 # max delta t between 2 points --> has to be less than SECONDS_PER_LUMISECTION
 ## End Inputs
 
 
 ## Mapping RunNumber to associated DesiredIeq in a Dict
-if len(RunNumberList) != len(DesiredIeqList):
-    print "RunNumberList,desiredIeqList \tparsed argument of different sizes...\nExiting .."
+if len(RunList) != len(DesiredIeqList):
+    print "RunList,desiredIeqList \tparsed argument of different sizes...\nExiting .."
     sys.exit(0)
 
 Run2DesiredIeq = {}
@@ -120,7 +120,7 @@ Run2DQM_FileName = {}
 
 ## Fetching multiple DQM.root
 # Using a .txt containing all the desired addresses in order to insert the PEM psw only once
-for index,RunNumber in enumerate(RunNumberList):
+for index,RunNumber in enumerate(RunList):
     DQM_FileName = "DQM_V0001_GEM_R000"+str(RunNumber)+".root"
     Run2DesiredIeq[RunNumber] = DesiredIeqList[index]
     Run2DQM_FileName[RunNumber] = DQM_FileName
@@ -143,10 +143,10 @@ os.system(cmd)
 os.system("rm Temp_ListOfDQMurls.txt")
 ## End of fetching multiple DQM.root
 
-print RunNumberList
+print RunList
 
 ## Produce output file for all Runs
-for RunNumber in RunNumberList:
+for RunNumber in RunList:
     desiredIeq = Run2DesiredIeq[RunNumber]
     DQM_FileName = Run2DQM_FileName[RunNumber]
     DQM_ChamberInError = []
