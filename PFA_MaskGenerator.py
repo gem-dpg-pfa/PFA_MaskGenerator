@@ -383,10 +383,10 @@ for RunNumber in RunList:
             ## Remove duplicate LSs
             MaskDict[ChID_L1] = list(set(MaskDict[ChID_L1]))
             MaskDict[ChID_L2] = list(set(MaskDict[ChID_L2]))
-            ## If always bad, put -1
-            if len(MaskDict[ChID_L1]) == N_LumiSection:
+            ## If 90% of the time was bad, mask all
+            if len(MaskDict[ChID_L1]) > float(0.9*N_LumiSection):
                 MaskDict[ChID_L1] = [-1]
-            if len(MaskDict[ChID_L2]) == N_LumiSection:
+            if len(MaskDict[ChID_L2]) > float(0.9*N_LumiSection):
                 MaskDict[ChID_L2] = [-1]
             ## Include Chambers in error
             for chamber_key in DQM_ChamberInError:
