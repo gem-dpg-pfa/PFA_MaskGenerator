@@ -106,6 +106,7 @@ SECONDS_PER_LUMISECTION = 23.3
 granularity = 20 # max delta t between 2 points --> has to be less than SECONDS_PER_LUMISECTION
 ## End Inputs
 
+BASE_DIRECTORY = os.path.expandvars("$DOC2_PFA")
 
 ## Mapping RunNumber to associated DesiredIeq in a Dict
 if len(RunList) != len(DesiredIeqList):
@@ -260,7 +261,8 @@ for RunNumber in RunList:
     c_negative_encap = ROOT.TCanvas("Negative Endcap","Negative Endcap",1600,900)
     c_positive_encap.Divide(6,6)
     c_negative_encap.Divide(6,6)
-    OutF = ROOT.TFile("./HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
+    HV_ProcessdFile = "./HV_Status_Run_"+str(RunNumber)+".root"
+    OutF = ROOT.TFile(HV_ProcessdFile,"RECREATE")
 
     ##Step 3: Looping over all SCs and stire LS for which Ieq != IeqDesired in the MaskDict
     for endcap in [1,-1]:
@@ -420,11 +422,12 @@ for RunNumber in RunList:
     writeToTFile(OutF,c_negative_encap)
     writeToTFile(OutF,c_positive_encap)
 
-    jsonFile = open("ChamberOFF_Run_"+str(RunNumber)+".json", "w")
+    json_file_path = BASE_DIRECTORY+"/Analyzer/ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json"
+    jsonFile = open(json_file_path, "w")
     json_data = json.dumps(MaskDict) 
     jsonFile.write(json_data)
 
     print "\n### Output produced ###"
-    print "\tChamberOFF_Run_"+str(RunNumber)+".json"
-    print "\tHV_Status_Run_"+str(RunNumber)+".root"
+    print "\t"+json_file_path
+    print "\t"+HV_ProcessdFile
     ##End of Step 4
