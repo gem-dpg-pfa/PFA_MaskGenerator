@@ -32,10 +32,9 @@ import os
 import re
 import pytz
 import sys
-import ctypes
 import numpy as np
 import scipy.interpolate as sp
-import matplotlib.pyplot as plt
+import subprocess
 
 __author__ = "Francesco Ivone"
 __copyright__ = "Copyright 2021, CMS GEM"
@@ -199,16 +198,36 @@ for RunNumber in RunList:
     DayBefore_RunStart_Datetime_UTC = datetime.datetime.fromtimestamp(DayBefore_RunStart_TimeStamp_UTC).strftime('%Y-%m-%d_%H:%M:%S')
     DayAfter_RunStop_Datetime_UTC = datetime.datetime.fromtimestamp(DayAfter_RunStop_TimeStamp_UTC).strftime('%Y-%m-%d_%H:%M:%S')
 
-    print "\n## Fetching DCS file ..."
-    DCS_TOOL_folder = os.getenv("DOC2_PFA")
-    DCS_TOOL_folder += "/DCS_Offline_Monitor"
-    DCS_dump_file = DCS_TOOL_folder+"/OutputFiles/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
+    print "\n## Fetching DCS file ...\n"
+    
+    raw_DCS_Filename = "P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
+    DCS_dump_file = "./HV_Files/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
+    
     if os.path.isfile(DCS_dump_file) and (args.recreateDCS is None):
-        print DCS_dump_file, "already exists\n"
+        print raw_DCS_Filename, "already exists in ./HV_Files\n"
     else:
-        cmd = "python "+DCS_TOOL_folder+"/GEMDCSP5Monitor.py "+DayBefore_RunStart_Datetime_UTC +" "+ DayAfter_RunStop_Datetime_UTC +" HV 0 -c all"
-        print cmd
-        os.system(cmd)
+        ## Connecting to gem904qc8dqm and running the script to fetch the DCS
+        ssh = subprocess.Popen(["ssh gemuser@gem904qc8dqm sh -s"],
+                                shell=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                stdin=subprocess.PIPE)
+        for command in ["source \"/home/gemuser/.bash_profile\"",str("python /home/gemuser/DOC2/DCS_Offline_Monitor/GEMDCSP5Monitor.py "+DayBefore_RunStart_Datetime_UTC +" "+ DayAfter_RunStop_Datetime_UTC +" HV 0 -c all")]:
+            ssh.stdin.write(command)
+            ssh.stdin.write("\n")
+        ssh.communicate()
+
+        
+        ## Downloading the DCS File from gem904qc8dqm
+        download_DCSROOT = "scp gemuser@gem904qc8dqm:/home/gemuser/DOC2/DCS_Offline_Monitor/OutputFiles/"+raw_DCS_Filename+" ./HV_Files/"
+        print download_DCSROOT
+        os.system(download_DCSROOT)
+
+        ## Removing DCS File from remote machine
+        rm_command = "\'rm /home/gemuser/DOC2/DCS_Offline_Monitor/OutputFiles/"+raw_DCS_Filename +"\'"
+        ssh = os.system("ssh gemuser@gem904qc8dqm " +rm_command)
+        
+
     print "\n## Fetch COMPLETE"
     ## End of Step 2
 
