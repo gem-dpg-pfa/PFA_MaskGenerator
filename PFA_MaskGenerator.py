@@ -37,6 +37,15 @@ import numpy as np
 import scipy.interpolate as sp
 import matplotlib.pyplot as plt
 
+analyzer_folder = os.path.expandvars('$PFA')
+lib_folder = analyzer_folder+"/lib/"
+sys.path.insert(1, lib_folder)
+try:
+    from PFA_Analyzer_Utils import *
+except:
+   print ("ERROR:\n\tCan't find the package PFA_Analyzer_Utils in ",lib_folder,"\nEXITING...\n")
+   sys.exit(0)
+
 __author__ = "Francesco Ivone"
 __copyright__ = "Copyright 2021, CMS GEM"
 __credits__ = ["Simone Calzaferri, Monika Mittal, Federica Simone"]
@@ -47,13 +56,6 @@ __email__ = "francesco.ivone@cern.ch"
 __status__ = "DevelopAlpha"
 __comment__ = "Developed on (another) rainy day"
 
-
-
-def ReChLa2chamberName(re,ch,la):
-    endcap = "M" if re == -1 else "P"
-    size = "S" if ch%2 == 1 else "L"
-    chID = 'GE11-'+endcap+'-%02d' % ch +"L"+str(la)+"-"+size 
-    return chID
 
 def UTCtime_2_LS(UTC_timestamp,RunStart_TimeStamp):
     global SECONDS_PER_LUMISECTION
@@ -240,7 +242,7 @@ for RunNumber in RunNumberList:
     c_negative_encap = ROOT.TCanvas("Negative Endcap","Negative Endcap",1600,900)
     c_positive_encap.Divide(6,6)
     c_negative_encap.Divide(6,6)
-    OutF = ROOT.TFile("./HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
+    OutF = ROOT.TFile(".HV_Files/HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
 
     ##Step 3: Looping over all SCs and stire LS for which Ieq != IeqDesired in the MaskDict
     for endcap in [1,-1]:
@@ -400,7 +402,7 @@ for RunNumber in RunNumberList:
     writeToTFile(OutF,c_negative_encap)
     writeToTFile(OutF,c_positive_encap)
 
-    jsonFile = open("ChamberOFF_Run_"+str(RunNumber)+".json", "w")
+    jsonFile = open(analyzer_folder+"ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json", "w")
     json_data = json.dumps(MaskDict) 
     jsonFile.write(json_data)
 
