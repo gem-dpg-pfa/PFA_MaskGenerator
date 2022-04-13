@@ -37,9 +37,8 @@ import numpy as np
 import scipy.interpolate as sp
 import matplotlib.pyplot as plt
 
-analyzer_folder = os.path.expandvars('$PFA')
-lib_folder = analyzer_folder+"/lib/"
-
+base_folder = os.path.expandvars('$PFA')
+lib_folder = base_folder+"/PFA_Analyzer/lib/"
 
 
 sys.path.insert(1, lib_folder)
@@ -128,11 +127,14 @@ Run2DQM_FileName = {}
 for index,RunNumber in enumerate(RunNumberList):
     DQM_FileName = "DQM_V0001_GEM_R000"+str(RunNumber)+".root"
     Run2DesiredIeq[RunNumber] = DesiredIeqList[index]
-    Run2DQM_FileName[RunNumber] = DQM_FileName
+    Run2DQM_FileName[RunNumber] = base_folder +"/PFA_MaskGenerator/"+DQM_FileName
     RunNumber_MSDigits2 = str(RunNumber)[:2]+"xxxx"
     RunNumber_MSDigits4 = str(RunNumber)[:4]+"xx"
-    temp_txt = open('Temp_ListOfDQMurls.txt', 'a')
-    if os.path.isfile("./"+DQM_FileName): 
+    DQMUrlsFile = base_folder+'/PFA_MaskGenerator/Temp_ListOfDQMurls.txt'
+
+
+    temp_txt = open(DQMUrlsFile, 'a')
+    if os.path.isfile(base_folder+"/PFA_MaskGenerator/"+DQM_FileName): 
         print DQM_FileName, "already exists\n"
         continue
     url = "https://cmsweb.cern.ch/dqm/offline/data/browse/ROOT/OnlineData/original/000"+RunNumber_MSDigits2+"/000"+RunNumber_MSDigits4+"/"+DQM_FileName+"\n"
@@ -142,17 +144,17 @@ temp_txt.close()
 print "\n## Fetching DQM file ..."
 username = os.getenv("USER")
 cert_path = "/afs/cern.ch/user/"+username[0]+"/"+username+"/.globus/"
-cmd = "wget --ca-cert="+cert_path+"/usercert.p12 --certificate="+cert_path+"/usercert.pem --private-key="+cert_path+"/userkey.pem  -i Temp_ListOfDQMurls.txt"
+cmd = "wget --ca-cert="+cert_path+"/usercert.p12 --certificate="+cert_path+"/usercert.pem --private-key="+cert_path+"/userkey.pem  -i "+DQMUrlsFile + " -P "+base_folder+"/PFA_MaskGenerator/"
 print cmd
 os.system(cmd)
-os.system("rm Temp_ListOfDQMurls.txt")
+os.system("rm "+DQMUrlsFile)
 ## End of fetching multiple DQM.root
 
 print RunNumberList
 
 ## Produce output file for all Runs
 for RunNumber in RunNumberList:
-    json_output = analyzer_folder+"ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json"
+    json_output = base_folder+"/PFA_Analyzer/ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json"
     desiredIeq = Run2DesiredIeq[RunNumber]
     DQM_FileName = Run2DQM_FileName[RunNumber]
     DQM_ExcludedChamber = []
@@ -201,9 +203,6 @@ for RunNumber in RunNumberList:
 
     ## End of Step 1
 
-    print DQM_ExcludedChamber
-    raw_input()
-
     ## Step 2: Fetching DCS.root
     # Using a 24h window centered on the run to avoid DCS channels without HV points
     DayBefore_RunStart_TimeStamp_UTC = RunStart_TimeStamp_UTC - 24*3600
@@ -251,7 +250,7 @@ for RunNumber in RunNumberList:
     c_negative_encap = ROOT.TCanvas("Negative Endcap","Negative Endcap",1600,900)
     c_positive_encap.Divide(6,6)
     c_negative_encap.Divide(6,6)
-    OutF = ROOT.TFile("./HV_Files/HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
+    OutF = ROOT.TFile(base_folder+"PFA_MaskGenerator/HV_Files/HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
 
     ##Step 3: Looping over all SCs and stire LS for which Ieq != IeqDesired in the MaskDict
     for endcap in [1,-1]:
