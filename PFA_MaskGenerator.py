@@ -210,10 +210,10 @@ for RunNumber in RunNumberList:
     print "\n## Fetching DCS file ...\n"
     
     raw_DCS_Filename = "P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
-    DCS_dump_file = "./HV_Files/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
+    DCS_dump_file = base_folder+"/Chamber_MaskMaker/HV_Files/P5_GEM_HV_monitor_UTC_start_"+DayBefore_RunStart_Datetime_UTC.replace(":", "-")+"_end_"    +DayAfter_RunStop_Datetime_UTC.replace(":", "-")+".root"
     
     if os.path.isfile(DCS_dump_file) and (args.recreateDCS is None):
-        print raw_DCS_Filename, "already exists in ./HV_Files\n"
+        print raw_DCS_Filename, "already exists in "+base_folder+"/Chamber_MaskMaker/HV_Files/\n"
     else:
         ## Connecting to gem904qc8dqm and running the script to fetch the DCS
         ssh = subprocess.Popen(["ssh gemuser@gem904qc8dqm sh -s"],
@@ -228,7 +228,7 @@ for RunNumber in RunNumberList:
 
         
         ## Downloading the DCS File from gem904qc8dqm
-        download_DCSROOT = "scp gemuser@gem904qc8dqm:/home/gemuser/DOC2/DCS_Offline_Monitor/OutputFiles/"+raw_DCS_Filename+" ./HV_Files/"
+        download_DCSROOT = "scp gemuser@gem904qc8dqm:/home/gemuser/DOC2/DCS_Offline_Monitor/OutputFiles/"+raw_DCS_Filename+" "+base_folder+"/Chamber_MaskMaker/HV_Files/
         print download_DCSROOT
         os.system(download_DCSROOT)
 
