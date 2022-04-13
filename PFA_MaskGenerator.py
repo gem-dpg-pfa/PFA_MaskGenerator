@@ -11,9 +11,9 @@
    Then the time window for Ieq != Ieq expected is derived and finally converted in LumiSection based on Run start time (UTC Format) and #LS (taken from DQM online)
 
    This utility takes as input 
-   - RunList
+   - RunNumberList
    - Expected Ieq List
-   For each run in the RunList this utility produces as output 
+   For each run in the RunNumberList this utility produces as output 
    - ChamberOFF_Run_<RunNumber>.json 
         (a JSON formatted file containing LS to mask for each chamber)
    - HV_Status_Run_<RunNumber>.root)
@@ -36,6 +36,15 @@ import numpy as np
 import scipy.interpolate as sp
 import subprocess
 
+base_folder = os.path.expandvars('$DOC2_PFA')
+lib_folder = base_folder+"/Analyzer/lib/"
+sys.path.insert(1, lib_folder)
+try:
+    from PFA_Analyzer_Utils import *
+except:
+   print ("ERROR:\n\tCan't find the package PFA_Analyzer_Utils in ",lib_folder,"\nEXITING...\n")
+   sys.exit(0)
+
 __author__ = "Francesco Ivone"
 __copyright__ = "Copyright 2021, CMS GEM"
 __credits__ = ["Simone Calzaferri, Monika Mittal, Federica Simone"]
@@ -46,13 +55,6 @@ __email__ = "francesco.ivone@cern.ch"
 __status__ = "DevelopAlpha"
 __comment__ = "Developed on (another) rainy day"
 
-
-
-def ReChLa2chamberName(re,ch,la):
-    endcap = "M" if re == -1 else "P"
-    size = "S" if ch%2 == 1 else "L"
-    chID = 'GE11-'+endcap+'-%02d' % ch +"L"+str(la)+"-"+size 
-    return chID
 
 def UTCtime_2_LS(UTC_timestamp,RunStart_TimeStamp):
     global SECONDS_PER_LUMISECTION
@@ -88,11 +90,11 @@ def writeToTFile(file,obj,directory=None):
 
 parser = argparse.ArgumentParser(
         description='''Scripts that generates chamber mask file for PFA Efficiency analyzer for a given run.\nIf for a given LS a chamber has Ieq != Ieq_Expected it will be listed in the OutputFile --> ChamberOFF_Run_<RunNumber>.json.\nThe scripts interrogates DCS and DQM to fetch the run conditions''',
-        epilog="""Typical exectuion\n\t python PFA_MaskGenerator.py  --RunList 344681 344680 344679  --ieq_expected_list 690 690 700""",
+        epilog="""Typical exectuion\n\t python PFA_MaskGenerator.py  --RunNumberList 344681 344680 344679  --ieq_expected_list 690 690 700""",
         formatter_class=RawTextHelpFormatter
 )
 
-parser.add_argument('-rl','--RunList', type=int,help="Run Number List ",required=True,nargs='*')
+parser.add_argument('-rl','--RunNumberList', type=int,help="Run Number List ",required=True,nargs='*')
 parser.add_argument('-iexpl','--ieq_expected_list', type=int,help="Expected list of ieq for the run list",required=True,nargs='*')
 parser.add_argument('-rDCS','--recreateDCS', help="Force DCS rootfile recreation")
 args = parser.parse_args()
@@ -101,16 +103,15 @@ ROOT.gROOT.SetBatch(True)
 
 ## Inputs
 DesiredIeqList = args.ieq_expected_list
-RunList = args.RunList
+RunNumberList = args.RunNumberList
 SECONDS_PER_LUMISECTION = 23.3
 granularity = 20 # max delta t between 2 points --> has to be less than SECONDS_PER_LUMISECTION
 ## End Inputs
 
-BASE_DIRECTORY = os.path.expandvars("$DOC2_PFA")
 
 ## Mapping RunNumber to associated DesiredIeq in a Dict
-if len(RunList) != len(DesiredIeqList):
-    print "RunList,desiredIeqList \tparsed argument of different sizes...\nExiting .."
+if len(RunNumberList) != len(DesiredIeqList):
+    print "RunNumberList,desiredIeqList \tparsed argument of different sizes...\nExiting .."
     sys.exit(0)
 
 Run2DesiredIeq = {}
@@ -120,14 +121,16 @@ Run2DQM_FileName = {}
 
 ## Fetching multiple DQM.root
 # Using a .txt containing all the desired addresses in order to insert the PEM psw only once
-for index,RunNumber in enumerate(RunList):
+for index,RunNumber in enumerate(RunNumberList):
     DQM_FileName = "DQM_V0001_GEM_R000"+str(RunNumber)+".root"
     Run2DesiredIeq[RunNumber] = DesiredIeqList[index]
-    Run2DQM_FileName[RunNumber] = DQM_FileName
+    Run2DQM_FileName[RunNumber] = base_folder +"/Chamber_MaskMaker/"+DQM_FileName
     RunNumber_MSDigits2 = str(RunNumber)[:2]+"xxxx"
     RunNumber_MSDigits4 = str(RunNumber)[:4]+"xx"
-    temp_txt = open('Temp_ListOfDQMurls.txt', 'a')
-    if os.path.isfile("./"+DQM_FileName): 
+    DQMUrlsFile = base_folder+'/Chamber_MaskMaker/Temp_ListOfDQMurls.txt'
+       
+    temp_txt = open(DQMUrlsFile, 'a')
+    if os.path.isfile(base_folder+"/Chamber_MaskMaker/"+DQM_FileName): 
         print DQM_FileName, "already exists\n"
         continue
     url = "https://cmsweb.cern.ch/dqm/offline/data/browse/ROOT/OnlineData/original/000"+RunNumber_MSDigits2+"/000"+RunNumber_MSDigits4+"/"+DQM_FileName+"\n"
@@ -137,19 +140,20 @@ temp_txt.close()
 print "\n## Fetching DQM file ..."
 username = os.getenv("USER")
 cert_path = "/afs/cern.ch/user/"+username[0]+"/"+username+"/.globus/"
-cmd = "wget --ca-cert="+cert_path+"/usercert.p12 --certificate="+cert_path+"/usercert.pem --private-key="+cert_path+"/userkey.pem  -i Temp_ListOfDQMurls.txt"
+cmd = "wget --ca-cert="+cert_path+"/usercert.p12 --certificate="+cert_path+"/usercert.pem --private-key="+cert_path+"/userkey.pem  -i "+DQMUrlsFile + " -P "+base_folder+"/Chamber_MaskMaker/"
 print cmd
 os.system(cmd)
-os.system("rm Temp_ListOfDQMurls.txt")
+os.system("rm "+DQMUrlsFile)
 ## End of fetching multiple DQM.root
 
-print RunList
+print RunNumberList
 
 ## Produce output file for all Runs
-for RunNumber in RunList:
+for RunNumber in RunNumberList:
+    json_output = base_folder+"/Analyzer/ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json"
     desiredIeq = Run2DesiredIeq[RunNumber]
     DQM_FileName = Run2DQM_FileName[RunNumber]
-    DQM_ChamberInError = []
+    DQM_ExcludedChamber = []
     
     try:
         DQMFile = ROOT.TFile.Open(DQM_FileName,"READ")
@@ -160,16 +164,20 @@ for RunNumber in RunList:
 
     ## Step 1: Acquiring N_LumiSection, RunStart in Europe TimeZone and UTC and Chambers in Error/Empty
     event_info = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo")
-    DQMsummary = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/reportSummaryMap")
+    DQMAllStatus = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberAllStatus")
+    DQMOHError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberOHErrors")
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             DQM_Endcap = 1 if y_bin in [2,3] else -1
             DQM_Layer = 2  if y_bin in [2,5] else 1
             DQM_ChamberID = ReChLa2chamberName(DQM_Endcap,x_bin,DQM_Layer)
-            ChamberStatus = DQMsummary.GetBinContent (x_bin, y_bin)
+            ChamberEmpty = DQMAllStatus.GetBinContent (x_bin, y_bin)
+            chamberError = DQMOHError.GetBinContent (x_bin, y_bin)
 
-            if ChamberStatus!=4: ###  chamber in error or empty
-                DQM_ChamberInError.append(DQM_ChamberID)
+            if ChamberEmpty==0: ###  chamber is empty
+                DQM_ExcludedChamber.append(DQM_ChamberID)
+            if chamberError!=0: ###  chamber is in error
+                DQM_ExcludedChamber.append(DQM_ChamberID)
 
     TList = event_info.GetListOfKeys()
     for item in TList:
@@ -261,8 +269,7 @@ for RunNumber in RunList:
     c_negative_encap = ROOT.TCanvas("Negative Endcap","Negative Endcap",1600,900)
     c_positive_encap.Divide(6,6)
     c_negative_encap.Divide(6,6)
-    HV_ProcessdFile = "./HV_Status_Run_"+str(RunNumber)+".root"
-    OutF = ROOT.TFile(HV_ProcessdFile,"RECREATE")
+    OutF = ROOT.TFile(base_folder+"Chamber_MaskMaker/HV_Files/HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
 
     ##Step 3: Looping over all SCs and stire LS for which Ieq != IeqDesired in the MaskDict
     for endcap in [1,-1]:
@@ -410,7 +417,7 @@ for RunNumber in RunList:
             if len(MaskDict[ChID_L2]) > float(0.9*N_LumiSection):
                 MaskDict[ChID_L2] = [-1]
             ## Include Chambers in error
-            for chamber_key in DQM_ChamberInError:
+            for chamber_key in DQM_ExcludedChamber:
                 MaskDict[chamber_key] = [-1]
 
     ##End of Step 3
@@ -422,12 +429,11 @@ for RunNumber in RunList:
     writeToTFile(OutF,c_negative_encap)
     writeToTFile(OutF,c_positive_encap)
 
-    json_file_path = BASE_DIRECTORY+"/Analyzer/ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json"
-    jsonFile = open(json_file_path, "w")
+    jsonFile = open(json_output, "w")
     json_data = json.dumps(MaskDict) 
     jsonFile.write(json_data)
 
     print "\n### Output produced ###"
-    print "\t"+json_file_path
-    print "\t"+HV_ProcessdFile
+    print "\t",json_output
+    print "\t",OutF.GetName()
     ##End of Step 4
