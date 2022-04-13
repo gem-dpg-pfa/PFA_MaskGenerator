@@ -228,7 +228,7 @@ for RunNumber in RunNumberList:
 
         
         ## Downloading the DCS File from gem904qc8dqm
-        download_DCSROOT = "scp gemuser@gem904qc8dqm:/home/gemuser/DOC2/DCS_Offline_Monitor/OutputFiles/"+raw_DCS_Filename+" "+base_folder+"/Chamber_MaskMaker/HV_Files/
+        download_DCSROOT = "scp gemuser@gem904qc8dqm:/home/gemuser/DOC2/DCS_Offline_Monitor/OutputFiles/"+raw_DCS_Filename+" "+base_folder+"/Chamber_MaskMaker/HV_Files/"
         print download_DCSROOT
         os.system(download_DCSROOT)
 
