@@ -39,6 +39,9 @@ import matplotlib.pyplot as plt
 
 analyzer_folder = os.path.expandvars('$PFA')
 lib_folder = analyzer_folder+"/lib/"
+
+
+
 sys.path.insert(1, lib_folder)
 try:
     from PFA_Analyzer_Utils import *
@@ -149,9 +152,10 @@ print RunNumberList
 
 ## Produce output file for all Runs
 for RunNumber in RunNumberList:
+    json_output = analyzer_folder+"ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json"
     desiredIeq = Run2DesiredIeq[RunNumber]
     DQM_FileName = Run2DQM_FileName[RunNumber]
-    DQM_ChamberInError = []
+    DQM_ExcludedChamber = []
     
     try:
         DQMFile = ROOT.TFile.Open(DQM_FileName,"READ")
@@ -162,16 +166,20 @@ for RunNumber in RunNumberList:
 
     ## Step 1: Acquiring N_LumiSection, RunStart in Europe TimeZone and UTC and Chambers in Error/Empty
     event_info = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo")
-    DQMsummary = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/reportSummaryMap")
+    DQMAllStatus = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberAllStatus")
+    DQMOHError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberOHErrors")
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             DQM_Endcap = 1 if y_bin in [2,3] else -1
             DQM_Layer = 2  if y_bin in [2,5] else 1
             DQM_ChamberID = ReChLa2chamberName(DQM_Endcap,x_bin,DQM_Layer)
-            ChamberStatus = DQMsummary.GetBinContent (x_bin, y_bin)
+            ChamberEmpty = DQMAllStatus.GetBinContent (x_bin, y_bin)
+            chamberError = DQMOHError.GetBinContent (x_bin, y_bin)
 
-            if ChamberStatus!=4: ###  chamber in error or empty
-                DQM_ChamberInError.append(DQM_ChamberID)
+            if ChamberEmpty==0: ###  chamber is empty
+                DQM_ExcludedChamber.append(DQM_ChamberID)
+            if chamberError!=0: ###  chamber is in error
+                DQM_ExcludedChamber.append(DQM_ChamberID)
 
     TList = event_info.GetListOfKeys()
     for item in TList:
@@ -193,6 +201,8 @@ for RunNumber in RunNumberList:
 
     ## End of Step 1
 
+    print DQM_ExcludedChamber
+    raw_input()
 
     ## Step 2: Fetching DCS.root
     # Using a 24h window centered on the run to avoid DCS channels without HV points
@@ -225,7 +235,6 @@ for RunNumber in RunNumberList:
     print "\tDatetime Europe/Berlin\t = ",RunStop_Datetime_CET,"\tTimestamp Europe/Berlin\t = ",RunStop_TimeStamp_CET
     print "\tDatetime UTC\t\t = ",RunStop_Datetime_UTC,"\tTimestamp UTC\t\t = ",RunStop_TimeStamp_UTC
     print "\n########################################################"
-
 
     try:
         inFile = ROOT.TFile.Open(DCS_dump_file ,"READ")
@@ -390,7 +399,7 @@ for RunNumber in RunNumberList:
             if len(MaskDict[ChID_L2]) > float(0.9*N_LumiSection):
                 MaskDict[ChID_L2] = [-1]
             ## Include Chambers in error
-            for chamber_key in DQM_ChamberInError:
+            for chamber_key in DQM_ExcludedChamber:
                 MaskDict[chamber_key] = [-1]
 
     ##End of Step 3
@@ -402,11 +411,11 @@ for RunNumber in RunNumberList:
     writeToTFile(OutF,c_negative_encap)
     writeToTFile(OutF,c_positive_encap)
 
-    jsonFile = open(analyzer_folder+"ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json", "w")
+    jsonFile = open(json_output, "w")
     json_data = json.dumps(MaskDict) 
     jsonFile.write(json_data)
 
     print "\n### Output produced ###"
-    print "\tChamberOFF_Run_"+str(RunNumber)+".json"
-    print "\tHV_Status_Run_"+str(RunNumber)+".root"
+    print "\t",json_output
+    print "\t",OutF.GetName()
     ##End of Step 4
