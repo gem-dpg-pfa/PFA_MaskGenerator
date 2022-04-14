@@ -269,7 +269,7 @@ for RunNumber in RunNumberList:
     c_negative_encap = ROOT.TCanvas("Negative Endcap","Negative Endcap",1600,900)
     c_positive_encap.Divide(6,6)
     c_negative_encap.Divide(6,6)
-    OutF = ROOT.TFile(base_folder+"Chamber_MaskMaker/HV_Files/HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
+    OutF = ROOT.TFile(base_folder+"/Chamber_MaskMaker/HV_Files/HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
 
     ##Step 3: Looping over all SCs and stire LS for which Ieq != IeqDesired in the MaskDict
     for endcap in [1,-1]:
