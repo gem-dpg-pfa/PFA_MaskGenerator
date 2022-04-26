@@ -166,17 +166,19 @@ for RunNumber in RunNumberList:
     event_info = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo")
     DQMAllStatus = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberAllStatus")
     DQMOHError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberOHErrors")
+    DQMError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberErrors")
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             DQM_Endcap = 1 if y_bin in [2,3] else -1
             DQM_Layer = 2  if y_bin in [2,5] else 1
             DQM_ChamberID = ReChLa2chamberName(DQM_Endcap,x_bin,DQM_Layer)
             ChamberEmpty = DQMAllStatus.GetBinContent (x_bin, y_bin)
-            chamberError = DQMOHError.GetBinContent (x_bin, y_bin)
+            chamberOHError = DQMOHError.GetBinContent (x_bin, y_bin)
+            chamberError = DQMError.GetBinContent (x_bin, y_bin)
 
             if ChamberEmpty==0: ###  chamber is empty
                 DQM_ExcludedChamber.append(DQM_ChamberID)
-            if chamberError!=0: ###  chamber is in error
+            if chamberError!=0 or chamberOHError!=0: ###  chamber is in error
                 DQM_ExcludedChamber.append(DQM_ChamberID)
 
     TList = event_info.GetListOfKeys()
