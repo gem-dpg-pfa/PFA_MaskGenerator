@@ -35,6 +35,7 @@ import sys
 import numpy as np
 import scipy.interpolate as sp
 import subprocess
+from scipy import stats
 
 base_folder = os.path.expandvars('$DOC2_PFA')
 lib_folder = base_folder+"/Analyzer/lib/"
@@ -167,6 +168,15 @@ for RunNumber in RunNumberList:
     DQMAllStatus = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberAllStatus")
     DQMOHError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberOHErrors")
     DQMError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberErrors")
+    
+    list_of_erros = []
+    for y_bin in range(2,6): ## first bin is for GE21
+        for x_bin in range(1,37):
+            list_of_erros.append(DQMError.GetBinContent (x_bin, y_bin))
+    
+    mode_of_errors = int(stats.mode(list_of_erros)[0])
+
+    
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             DQM_Endcap = 1 if y_bin in [2,3] else -1
