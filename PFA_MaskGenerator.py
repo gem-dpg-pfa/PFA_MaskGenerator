@@ -36,9 +36,10 @@ import ctypes
 import numpy as np
 import scipy.interpolate as sp
 import matplotlib.pyplot as plt
+from scipy import stats
 
 base_folder = os.path.expandvars('$PFA')
-lib_folder = base_folder+"/PFA_Analyzer/lib/"
+lib_folder = base_folder+"/Analyzer/lib/"
 
 
 sys.path.insert(1, lib_folder)
@@ -127,14 +128,14 @@ Run2DQM_FileName = {}
 for index,RunNumber in enumerate(RunNumberList):
     DQM_FileName = "DQM_V0001_GEM_R000"+str(RunNumber)+".root"
     Run2DesiredIeq[RunNumber] = DesiredIeqList[index]
-    Run2DQM_FileName[RunNumber] = base_folder +"/PFA_MaskGenerator/"+DQM_FileName
+    Run2DQM_FileName[RunNumber] = base_folder +"/Chamber_MaskMaker/"+DQM_FileName
     RunNumber_MSDigits2 = str(RunNumber)[:2]+"xxxx"
     RunNumber_MSDigits4 = str(RunNumber)[:4]+"xx"
-    DQMUrlsFile = base_folder+'/PFA_MaskGenerator/Temp_ListOfDQMurls.txt'
+    DQMUrlsFile = base_folder+'/Chamber_MaskMaker/Temp_ListOfDQMurls.txt'
 
 
     temp_txt = open(DQMUrlsFile, 'a')
-    if os.path.isfile(base_folder+"/PFA_MaskGenerator/"+DQM_FileName): 
+    if os.path.isfile(base_folder+"/Chamber_MaskMaker/"+DQM_FileName): 
         print DQM_FileName, "already exists\n"
         continue
     url = "https://cmsweb.cern.ch/dqm/offline/data/browse/ROOT/OnlineData/original/000"+RunNumber_MSDigits2+"/000"+RunNumber_MSDigits4+"/"+DQM_FileName+"\n"
@@ -144,7 +145,7 @@ temp_txt.close()
 print "\n## Fetching DQM file ..."
 username = os.getenv("USER")
 cert_path = "/afs/cern.ch/user/"+username[0]+"/"+username+"/.globus/"
-cmd = "wget --ca-cert="+cert_path+"/usercert.p12 --certificate="+cert_path+"/usercert.pem --private-key="+cert_path+"/userkey.pem  -i "+DQMUrlsFile + " -P "+base_folder+"/PFA_MaskGenerator/"
+cmd = "wget --ca-cert="+cert_path+"/usercert.p12 --certificate="+cert_path+"/usercert.pem --private-key="+cert_path+"/userkey.pem  -i "+DQMUrlsFile + " -P "+base_folder+"/Chamber_MaskMaker/"
 print cmd
 os.system(cmd)
 os.system("rm "+DQMUrlsFile)
@@ -154,7 +155,7 @@ print RunNumberList
 
 ## Produce output file for all Runs
 for RunNumber in RunNumberList:
-    json_output = base_folder+"/PFA_Analyzer/ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json"
+    json_output = base_folder+"/Analyzer/ExcludeMe/ChamberOFF_Run_"+str(RunNumber)+".json"
     desiredIeq = Run2DesiredIeq[RunNumber]
     DQM_FileName = Run2DQM_FileName[RunNumber]
     DQM_ExcludedChamber = []
@@ -170,18 +171,31 @@ for RunNumber in RunNumberList:
     event_info = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo")
     DQMAllStatus = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberAllStatus")
     DQMOHError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberOHErrors")
+    DQMError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberErrors")
+
+    list_of_erros = []
+    for y_bin in range(2,6): ## first bin is for GE21
+        for x_bin in range(1,37):
+            list_of_erros.append(DQMError.GetBinContent (x_bin, y_bin))
+    
+    mode_of_errors = int(stats.mode(list_of_erros)[0])
+    print mode_of_errors
+
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             DQM_Endcap = 1 if y_bin in [2,3] else -1
             DQM_Layer = 2  if y_bin in [2,5] else 1
             DQM_ChamberID = ReChLa2chamberName(DQM_Endcap,x_bin,DQM_Layer)
             ChamberEmpty = DQMAllStatus.GetBinContent (x_bin, y_bin)
-            chamberError = DQMOHError.GetBinContent (x_bin, y_bin)
+            chamberOHError = DQMOHError.GetBinContent (x_bin, y_bin)
+            chamberError = DQMError.GetBinContent (x_bin, y_bin)
 
             if ChamberEmpty==0: ###  chamber is empty
                 DQM_ExcludedChamber.append(DQM_ChamberID)
-            if chamberError!=0: ###  chamber is in error
+            print DQM_ChamberID, chamberError,chamberOHError
+            if (chamberError!=0 or chamberOHError!=0) and int(chamberError)!=mode_of_errors: ###  chamber is in error
                 DQM_ExcludedChamber.append(DQM_ChamberID)
+                print "Masked"
 
     TList = event_info.GetListOfKeys()
     for item in TList:
@@ -250,7 +264,7 @@ for RunNumber in RunNumberList:
     c_negative_encap = ROOT.TCanvas("Negative Endcap","Negative Endcap",1600,900)
     c_positive_encap.Divide(6,6)
     c_negative_encap.Divide(6,6)
-    OutF = ROOT.TFile(base_folder+"PFA_MaskGenerator/HV_Files/HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
+    OutF = ROOT.TFile(base_folder+"Chamber_MaskMaker/HV_Files/HV_Status_Run_"+str(RunNumber)+".root","RECREATE")
 
     ##Step 3: Looping over all SCs and stire LS for which Ieq != IeqDesired in the MaskDict
     for endcap in [1,-1]:
