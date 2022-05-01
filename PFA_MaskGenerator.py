@@ -174,28 +174,31 @@ for RunNumber in RunNumberList:
     DQMError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberErrors")
 
     list_of_erros = []
+    list_of_status = []
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             list_of_erros.append(DQMError.GetBinContent (x_bin, y_bin))
+            list_of_status.append(DQMAllStatus.GetBinContent(x_bin,y_bin))
     
     mode_of_errors = int(stats.mode(list_of_erros)[0])
-    print mode_of_errors
+    mode_of_status = int(stats.mode(list_of_status)[0])
 
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             DQM_Endcap = 1 if y_bin in [2,3] else -1
             DQM_Layer = 2  if y_bin in [2,5] else 1
             DQM_ChamberID = ReChLa2chamberName(DQM_Endcap,x_bin,DQM_Layer)
-            ChamberEmpty = DQMAllStatus.GetBinContent (x_bin, y_bin)
+            ChamberStatus = DQMAllStatus.GetBinContent (x_bin, y_bin)
             chamberOHError = DQMOHError.GetBinContent (x_bin, y_bin)
             chamberError = DQMError.GetBinContent (x_bin, y_bin)
 
-            if ChamberEmpty==0: ###  chamber is empty
+            if ChamberStatus==0 or int(ChamberStatus)!=mode_of_status : ###  chamber is empty or in error
                 DQM_ExcludedChamber.append(DQM_ChamberID)
-            print DQM_ChamberID, chamberError,chamberOHError
+                print DQM_ChamberID,"Masked"
+            
             if (chamberError!=0 or chamberOHError!=0) and int(chamberError)!=mode_of_errors: ###  chamber is in error
                 DQM_ExcludedChamber.append(DQM_ChamberID)
-                print "Masked"
+                print DQM_ChamberID,"Masked"
 
     TList = event_info.GetListOfKeys()
     for item in TList:
@@ -293,6 +296,8 @@ for RunNumber in RunNumberList:
                 Drift = inFile.Get("GE"+region_string+"1_1_"+ch+"/HV_VmonChamberGE"+region_string+"1_1_"+ch+"_Drift_UTC_time")
             except:
                 print "Couldn't find data for ",SC_ID,"... Skipping"
+                MaskDict[ChID_L1] = [-1] ## If data can't be found, mask chamber
+                MaskDict[ChID_L2] = [-1] ## If data can't be found, mask chamber
 
             fetched_graph = [G1Top,G2Top,G3Top,G1Bot,G2Bot,G3Bot,Drift]
 
@@ -309,6 +314,8 @@ for RunNumber in RunNumberList:
                         raise RuntimeError
             except RuntimeError:
                 print "Skipping ", SC_ID
+                MaskDict[ChID_L1] = [-1] ## If data aren't enough, mask chamber
+                MaskDict[ChID_L2] = [-1] ## If data aren't enough, mask chamber
                 continue
 
             x_list = []
