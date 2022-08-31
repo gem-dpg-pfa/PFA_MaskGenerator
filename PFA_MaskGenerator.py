@@ -92,6 +92,14 @@ def writeToTFile(file,obj,directory=None):
     obj.Write()
 
 
+def writeBadVFATfile(run_number,list_of_badVFATs):
+    bad_VFATs_output = base_folder+"/Analyzer/ExcludeMe/ListOfDeadVFAT_run"+str(RunNumber)+".txt"
+    with open(bad_VFATs_output, "w") as fout:
+        fout.write("region\tlayer\tchamber\tVFAT\treason_mask\n")
+        for tpl in list_of_badVFATs:
+            print(tpl)
+            fout.write(tpl[0]+"\t"+str(tpl[1])+"\t"+str(tpl[2])+"\t"+str(tpl[3])+"\t1\n")
+
 parser = argparse.ArgumentParser(
         description='''Scripts that generates chamber mask file for PFA Efficiency analyzer for a given run.\nIf for a given LS a chamber has Ieq != Ieq_Expected it will be listed in the OutputFile --> ChamberOFF_Run_<RunNumber>.json.\nThe scripts interrogates DCS and DQM to fetch the run conditions''',
         epilog="""Typical exectuion\n\t python PFA_MaskGenerator.py  --RunNumberList 344681 344680 344679  --ieq_expected_list 690 690 700""",
@@ -175,6 +183,7 @@ for RunNumber in RunNumberList:
 
     list_of_erros = []
     list_of_status = []
+    list_of_badVFATs = []
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             list_of_erros.append(DQMError.GetBinContent (x_bin, y_bin))
@@ -215,6 +224,19 @@ for RunNumber in RunNumberList:
 
     RunStart_Datetime_UTC,RunStart_TimeStamp_UTC = BerlinTime_2_UTC(RunStart_Datetime_CET)
     RunStop_Datetime_UTC,RunStop_TimeStamp_UTC = BerlinTime_2_UTC(RunStop_Datetime_CET)
+
+    ## Get VFATs status (mask bad/empty VFATs)
+    for re in ["P","M"]:
+        for l in [1,2]:
+            current_plot = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/vfat_statusSummary_GE11-"+re+"-L"+str(l))
+
+            for x_bin in range(1,37): # ch
+                for y_bin in range(1,25): # VFATN + 1
+                    bin_content = current_plot.GetBinContent(x_bin, y_bin)
+                    if bin_content != 1:
+                        list_of_badVFATs.append( (re,l,x_bin,y_bin-1) )
+    writeBadVFATfile(RunNumber,list_of_badVFATs)
+        
     # deleting DQM_File
     #os.system("rm "+DQM_FileName)
 
