@@ -233,6 +233,7 @@ for RunNumber in RunNumberList:
     if os.path.isfile(DCS_dump_file) and (args.recreateDCS is None):
         print DCS_dump_file, "already exists\n"
     else:
+        print(DayBefore_RunStart_Datetime_UTC)
         cmd = "python "+DCS_TOOL_folder+"/GEMDCSP5Monitor.py "+DayBefore_RunStart_Datetime_UTC +" "+ DayAfter_RunStop_Datetime_UTC +" HV 0 -c all"
         print cmd
         os.system(cmd)
@@ -298,6 +299,9 @@ for RunNumber in RunNumberList:
                 print "Couldn't find data for ",SC_ID,"... Skipping"
                 MaskDict[ChID_L1] = [-1] ## If data can't be found, mask chamber
                 MaskDict[ChID_L2] = [-1] ## If data can't be found, mask chamber
+                print ChID_L1,"Masked"
+                print ChID_L2,"Masked"
+                continue
 
             fetched_graph = [G1Top,G2Top,G3Top,G1Bot,G2Bot,G3Bot,Drift]
 
@@ -316,6 +320,8 @@ for RunNumber in RunNumberList:
                 print "Skipping ", SC_ID
                 MaskDict[ChID_L1] = [-1] ## If data aren't enough, mask chamber
                 MaskDict[ChID_L2] = [-1] ## If data aren't enough, mask chamber
+                print ChID_L1,"Masked"
+                print ChID_L2,"Masked"
                 continue
 
             x_list = []
