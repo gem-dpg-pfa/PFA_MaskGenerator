@@ -97,7 +97,6 @@ def writeBadVFATfile(run_number,list_of_badVFATs):
     with open(bad_VFATs_output, "w") as fout:
         fout.write("region\tlayer\tchamber\tVFAT\treason_mask\n")
         for tpl in list_of_badVFATs:
-            print(tpl)
             fout.write(tpl[0]+"\t"+str(tpl[1])+"\t"+str(tpl[2])+"\t"+str(tpl[3])+"\t1\n")
 
 parser = argparse.ArgumentParser(
@@ -226,15 +225,15 @@ for RunNumber in RunNumberList:
     RunStop_Datetime_UTC,RunStop_TimeStamp_UTC = BerlinTime_2_UTC(RunStop_Datetime_CET)
 
     ## Get VFATs status (mask bad/empty VFATs)
-    for re in ["P","M"]:
+    for region in ["P","M"]:
         for l in [1,2]:
-            current_plot = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/vfat_statusSummary_GE11-"+re+"-L"+str(l))
+            current_plot = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/vfat_statusSummary_GE11-"+region+"-L"+str(l))
 
             for x_bin in range(1,37): # ch
                 for y_bin in range(1,25): # VFATN + 1
                     bin_content = current_plot.GetBinContent(x_bin, y_bin)
                     if bin_content != 1:
-                        list_of_badVFATs.append( (re,l,x_bin,y_bin-1) )
+                        list_of_badVFATs.append( (region,l,x_bin,y_bin-1) )
     writeBadVFATfile(RunNumber,list_of_badVFATs)
         
     # deleting DQM_File
