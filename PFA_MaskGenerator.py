@@ -176,38 +176,23 @@ for RunNumber in RunNumberList:
 
     ## Step 1: Acquiring N_LumiSection, RunStart in Europe TimeZone and UTC and Chambers in Error/Empty
     event_info = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo")
-    DQMAllStatus = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberAllStatus")
-    DQMOHError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberOHErrors")
-    DQMError = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/DAQStatus/chamberErrors")
+    summaryMap = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/reportSummaryMap")
 
     list_of_erros = []
     list_of_status = []
     list_of_badVFATs = []
-    for y_bin in range(2,6): ## first bin is for GE21
-        for x_bin in range(1,37):
-            list_of_erros.append(DQMError.GetBinContent (x_bin, y_bin))
-            list_of_status.append(DQMAllStatus.GetBinContent(x_bin,y_bin))
-    
-    mode_of_errors = int(stats.mode(list_of_erros)[0])
-    mode_of_status = int(stats.mode(list_of_status)[0])
 
     for y_bin in range(2,6): ## first bin is for GE21
         for x_bin in range(1,37):
             DQM_Endcap = 1 if y_bin in [2,3] else -1
             DQM_Layer = 2  if y_bin in [2,5] else 1
             DQM_ChamberID = ReChLa2chamberName(DQM_Endcap,x_bin,DQM_Layer)
-            ChamberStatus = DQMAllStatus.GetBinContent (x_bin, y_bin)
-            chamberOHError = DQMOHError.GetBinContent (x_bin, y_bin)
-            chamberError = DQMError.GetBinContent (x_bin, y_bin)
+            ChamberStatus = summaryMap.GetBinContent (x_bin, y_bin)
 
-            if ChamberStatus==0 or int(ChamberStatus)!=mode_of_status : ###  chamber is empty or in error
+            if ChamberStatus==0: ###  chamber is empty
                 DQM_ExcludedChamber.append(DQM_ChamberID)
-                print DQM_ChamberID,"Masked"
+                print DQM_ChamberID,"is emtpy, hence masked..."
             
-            if (chamberError!=0 or chamberOHError!=0) and int(chamberError)!=mode_of_errors: ###  chamber is in error
-                DQM_ExcludedChamber.append(DQM_ChamberID)
-                print DQM_ChamberID,"Masked"
-
     TList = event_info.GetListOfKeys()
     for item in TList:
         if  "iEvent" in item.GetName():
@@ -224,18 +209,6 @@ for RunNumber in RunNumberList:
     RunStart_Datetime_UTC,RunStart_TimeStamp_UTC = BerlinTime_2_UTC(RunStart_Datetime_CET)
     RunStop_Datetime_UTC,RunStop_TimeStamp_UTC = BerlinTime_2_UTC(RunStop_Datetime_CET)
 
-    ## Get VFATs status (mask bad/empty VFATs)
-    for region in ["P","M"]:
-        for l in [1,2]:
-            current_plot = DQMFile.Get("DQMData/Run "+str(RunNumber)+"/GEM/Run summary/EventInfo/vfat_statusSummary_GE11-"+region+"-L"+str(l))
-
-            for x_bin in range(1,37): # ch
-                for y_bin in range(1,25): # VFATN + 1
-                    bin_content = current_plot.GetBinContent(x_bin, y_bin)
-                    if bin_content != 1:
-                        list_of_badVFATs.append( (region,l,x_bin,y_bin-1) )
-    writeBadVFATfile(RunNumber,list_of_badVFATs)
-        
     # deleting DQM_File
     #os.system("rm "+DQM_FileName)
 
